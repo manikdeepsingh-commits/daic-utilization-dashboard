@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DAIC Utilization Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+:root { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #111827; min-height: 100vh; font-size: 14px; }
+
+/* ── Header ── */
+.header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1d4ed8 100%); color: white; padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(0,0,0,0.25); position: sticky; top: 0; z-index: 100; }
+.header h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.header p { font-size: 12px; opacity: 0.55; margin-top: 2px; }
+.as-of { font-size: 11px; background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 20px; }
+
+/* ── Layout ── */
+.main { padding: 24px 32px; max-width: 1600px; margin: 0 auto; }
+
+/* ── Cards ── */
+.summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.card { background: white; border-radius: 14px; padding: 20px 22px; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb; }
+.card-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #6b7280; margin-bottom: 8px; }
+.card-value { font-size: 32px; font-weight: 900; line-height: 1; }
+.card-sub { font-size: 12px; color: #9ca3af; margin-top: 5px; }
+.green { color: #059669; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+
+/* ── Company Cards ── */
+.company-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.company-card { background: white; border-radius: 14px; padding: 22px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb; }
+.company-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.company-badge { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 10px; border-radius: 20px; }
+.badge-bit { background: #dbeafe; color: #1d4ed8; }
+.badge-badal { background: #ede9fe; color: #6d28d9; }
+.company-title { font-size: 16px; font-weight: 800; }
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.stat { padding: 12px 14px; background: #f9fafb; border-radius: 10px; border: 1px solid #f0f0f0; }
+.stat-val { font-size: 24px; font-weight: 900; }
+.stat-lbl { font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+.util-bar { height: 8px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+.util-fill { height: 100%; border-radius: 99px; }
+.fill-green { background: linear-gradient(90deg, #059669, #10b981); }
+.fill-amber { background: linear-gradient(90deg, #d97706, #f59e0b); }
+.fill-red { background: linear-gradient(90deg, #dc2626, #ef4444); }
+.util-label { display: flex; justify-content: space-between; font-size: 11px; color: #9ca3af; margin-top: 4px; }
+
+/* ── Tabs ── */
+.tab-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; }
+.tab { padding: 9px 20px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s; border-radius: 8px 8px 0 0; white-space: nowrap; }
+.tab:hover { color: #1d4ed8; background: #eff6ff; }
+.tab.active { color: #1d4ed8; border-bottom-color: #1d4ed8; background: #eff6ff; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── Month selector ── */
+.month-selector { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+.month-btn { padding: 8px 18px; border-radius: 10px; border: 2px solid #e5e7eb; background: white; cursor: pointer; font-size: 13px; font-weight: 700; color: #6b7280; transition: all 0.15s; position: relative; }
+.month-btn:hover { border-color: #1d4ed8; color: #1d4ed8; }
+.month-btn.active { border-color: #1d4ed8; background: #1d4ed8; color: white; }
+.month-btn .month-tag { display: block; font-size: 9px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 2px; opacity: 0.75; }
+.month-btn.active .month-tag { opacity: 0.85; }
+.month-btn.actuals { border-color: #d1fae5; }
+.month-btn.actuals:not(.active) { background: #f0fdf4; color: #065f46; border-color: #6ee7b7; }
+.month-btn.current { border-color: #fde68a; }
+.month-btn.current:not(.active) { background: #fffbeb; color: #92400e; border-color: #fbbf24; }
+.month-btn.forecast { border-color: #ddd6fe; }
+.month-btn.forecast:not(.active) { background: #f5f3ff; color: #5b21b6; border-color: #a78bfa; }
+
+/* ── Monthly summary bar ── */
+.monthly-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+.mscard { background: white; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb; text-align: center; }
+.mscard-val { font-size: 26px; font-weight: 900; }
+.mscard-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; margin-top: 3px; }
+
+/* ── Three-column layout ── */
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.col-card { background: white; border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb; overflow: hidden; }
+.col-header { padding: 14px 18px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; justify-content: space-between; }
+.col-title { font-size: 13px; font-weight: 800; }
+.col-count { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+.col-bench .col-header { background: #fef2f2; }
+.col-bench .col-title { color: #991b1b; }
+.col-bench .col-count { background: #fee2e2; color: #991b1b; }
+.col-partial .col-header { background: #fffbeb; }
+.col-partial .col-title { color: #92400e; }
+.col-partial .col-count { background: #fef3c7; color: #92400e; }
+.col-full .col-header { background: #f0fdf4; }
+.col-full .col-title { color: #065f46; }
+.col-full .col-count { background: #dcfce7; color: #166534; }
+.col-body { padding: 8px; max-height: 560px; overflow-y: auto; }
+.person-row { display: flex; align-items: flex-start; padding: 9px 10px; border-radius: 8px; transition: background 0.1s; gap: 10px; }
+.person-row:hover { background: #f9fafb; }
+.person-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; color: white; }
+.av-bit { background: #2563eb; }
+.av-badal { background: #7c3aed; }
+.person-info { flex: 1; min-width: 0; }
+.person-name { font-size: 12px; font-weight: 700; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.person-title { font-size: 10px; color: #9ca3af; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.person-meta { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+.alloc-pct { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 4px; }
+.pct-zero { background: #fee2e2; color: #991b1b; }
+.pct-partial { background: #fef3c7; color: #92400e; }
+.pct-full { background: #dcfce7; color: #166534; }
+.proj-tag { font-size: 9.5px; background: #f3f4f6; color: #6b7280; padding: 1px 6px; border-radius: 4px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Trend chart ── */
+.trend-wrap { background: white; border-radius: 14px; padding: 20px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb; margin-bottom: 20px; }
+.trend-wrap h3 { font-size: 14px; font-weight: 800; margin-bottom: 16px; color: #374151; }
+.trend-chart-wrap { position: relative; height: 200px; }
+
+/* ── Filter bar ── */
+.filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-bar select, .filter-bar input { padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; background: white; color: #374151; outline: none; }
+.filter-bar select:focus, .filter-bar input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.filter-bar input[type=text] { width: 220px; }
+.results-count { font-size: 12px; color: #9ca3af; margin-left: auto; }
+
+/* ── Table ── */
+.table-wrap { background: white; border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb; overflow: hidden; }
+.tbl-header { padding: 16px 20px 0; }
+.tbl-title { font-size: 14px; font-weight: 800; margin-bottom: 12px; }
+.tbl-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+thead th { background: #f8fafc; color: #6b7280; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 14px; text-align: left; white-space: nowrap; border-bottom: 1px solid #e5e7eb; cursor: pointer; user-select: none; }
+thead th:hover { background: #f0f4ff; color: #2563eb; }
+thead th.sorted { color: #2563eb; background: #eff6ff; }
+tbody tr { border-bottom: 1px solid #f3f4f6; transition: background 0.1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: #f8faff; }
+tbody td { padding: 10px 14px; vertical-align: middle; }
+.name-cell { font-weight: 600; color: #111827; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+.pill-bench { background: #fee2e2; color: #991b1b; }
+.pill-bit { background: #dbeafe; color: #1d4ed8; }
+.pill-badal { background: #ede9fe; color: #6d28d9; }
+.pill-tentative { background: #fef3c7; color: #92400e; }
+.pill-scheduled { background: #dbeafe; color: #1e40af; }
+.pill-partial { background: #fef3c7; color: #92400e; }
+.pill-full { background: #dcfce7; color: #166534; }
+.alloc-bar { height: 4px; background: #e5e7eb; border-radius: 99px; margin-top: 4px; overflow: hidden; }
+.alloc-fill-amber { height: 100%; background: #f59e0b; border-radius: 99px; }
+.alloc-fill-green { height: 100%; background: #10b981; border-radius: 99px; }
+.sf-link { color: #2563eb; text-decoration: none; font-size: 11px; }
+.sf-link:hover { text-decoration: underline; }
+
+/* ── Sub-tab bar for allocs ── */
+.sub-tab-bar { display: flex; gap: 6px; margin-bottom: 14px; }
+.sub-tab { padding: 6px 16px; border-radius: 8px; border: 1px solid #e5e7eb; background: white; cursor: pointer; font-size: 12px; font-weight: 700; color: #6b7280; transition: all 0.15s; }
+.sub-tab:hover { border-color: #2563eb; color: #2563eb; }
+.sub-tab.active { background: #2563eb; color: white; border-color: #2563eb; }
+.sub-tab.amber.active { background: #d97706; border-color: #d97706; }
+.sub-tab.green.active { background: #059669; border-color: #059669; }
+
+/* ── Pagination ── */
+.pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: #f8fafc; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
+.page-btns { display: flex; gap: 6px; }
+.page-btn { padding: 4px 10px; border: 1px solid #d1d5db; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: #374151; }
+.page-btn:hover { border-color: #2563eb; color: #2563eb; }
+.page-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+
+/* ── Charts ── */
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-card { background: white; border-radius: 14px; padding: 20px 22px; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb; }
+.chart-card h3 { font-size: 13px; font-weight: 800; color: #374151; margin-bottom: 16px; }
+.chart-wrap { position: relative; height: 260px; }
+.empty { padding: 40px; text-align: center; color: #9ca3af; font-size: 13px; }
+
+/* ── Legend strip ── */
+.legend-strip { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #6b7280; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.dot-red { background: #dc2626; }
+.dot-amber { background: #d97706; }
+.dot-green { background: #059669; }
+
+@media (max-width: 900px) {
+  .main { padding: 16px; }
+  .summary-row { grid-template-columns: repeat(2,1fr); }
+  .company-row, .three-col, .charts-grid { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: repeat(2,1fr); }
+  .monthly-summary { grid-template-columns: repeat(3,1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>DAIC Utilization Dashboard</h1>
+    <p>Bitstrapped · Badal — TELUS International</p>
+  </div>
+  <span class="as-of" id="asOf"></span>
+</div>
+
+<div class="main">
+
+  <!-- Top KPI cards -->
+  <div class="summary-row">
+    <div class="card"><div class="card-label">Total Headcount (DAIC)</div><div class="card-value blue">111</div><div class="card-sub">Bitstrapped (40) + Badal (71)</div></div>
+    <div class="card"><div class="card-label">Currently on Bench</div><div class="card-value red">10</div><div class="card-sub">3 Bitstrapped · 7 Badal</div></div>
+    <div class="card"><div class="card-label">DAIC Utilization (Today)</div><div class="card-value green">91%</div><div class="card-sub">101 of 111 placed</div></div>
+    <div class="card"><div class="card-label">Active Allocations</div><div class="card-value blue">116</div><div class="card-sub">49 Bitstrapped · 67 Badal</div></div>
+  </div>
+
+  <!-- Company summary -->
+  <div class="company-row">
+    <div class="company-card">
+      <div class="company-header"><span class="company-badge badge-bit">Bitstrapped</span><span class="company-title">Bitstrapped Inc.</span></div>
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-val blue">40</div><div class="stat-lbl">Total HC</div></div>
+        <div class="stat"><div class="stat-val green">93%</div><div class="stat-lbl">Utilization</div></div>
+        <div class="stat"><div class="stat-val red">3</div><div class="stat-lbl">Bench</div></div>
+        <div class="stat"><div class="stat-val blue">37</div><div class="stat-lbl">Active</div></div>
+      </div>
+      <div class="util-bar"><div class="util-fill fill-green" style="width:93%"></div></div>
+      <div class="util-label"><span>0%</span><span style="color:#059669;font-weight:700;">93% utilized</span><span>100%</span></div>
+    </div>
+    <div class="company-card">
+      <div class="company-header"><span class="company-badge badge-badal">Badal</span><span class="company-title">Badal.io Inc.</span></div>
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-val blue">71</div><div class="stat-lbl">Total HC</div></div>
+        <div class="stat"><div class="stat-val green">90%</div><div class="stat-lbl">Utilization</div></div>
+        <div class="stat"><div class="stat-val red">7</div><div class="stat-lbl">Bench</div></div>
+        <div class="stat"><div class="stat-val blue">64</div><div class="stat-lbl">Active</div></div>
+      </div>
+      <div class="util-bar"><div class="util-fill fill-green" style="width:90%"></div></div>
+      <div class="util-label"><span>0%</span><span style="color:#059669;font-weight:700;">90% utilized</span><span>100%</span></div>
+    </div>
+  </div>
+
+  <!-- Main tabs -->
+  <div class="tab-bar">
+    <button class="tab active" onclick="switchTab(event,'monthly')">📅 Monthly View</button>
+    <button class="tab" onclick="switchTab(event,'bench')">🔴 On Bench (10)</button>
+    <button class="tab" onclick="switchTab(event,'alloc')">🟢 Allocations (116)</button>
+    <button class="tab" onclick="switchTab(event,'charts')">📊 Role & Service Line</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- MONTHLY VIEW                                       -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="panel active" id="panel-monthly">
+
+    <!-- Month buttons -->
+    <div class="month-selector">
+      <button class="month-btn actuals" onclick="selectMonth(this,'2026-04')" data-m="2026-04">April 2026<span class="month-tag">✓ Actuals</span></button>
+      <button class="month-btn actuals" onclick="selectMonth(this,'2026-05')" data-m="2026-05">May 2026<span class="month-tag">✓ Actuals</span></button>
+      <button class="month-btn current active" onclick="selectMonth(this,'2026-06')" data-m="2026-06">June 2026<span class="month-tag">◉ Current</span></button>
+      <button class="month-btn forecast" onclick="selectMonth(this,'2026-07')" data-m="2026-07">July 2026<span class="month-tag">⟳ Forecast</span></button>
+      <button class="month-btn forecast" onclick="selectMonth(this,'2026-08')" data-m="2026-08">August 2026<span class="month-tag">⟳ Forecast</span></button>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+        <select id="monthCo" onchange="renderMonthly()" style="padding:7px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;background:white;">
+          <option value="all">All Companies</option>
+          <option value="Bitstrapped">Bitstrapped</option>
+          <option value="Badal">Badal</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Trend chart -->
+    <div class="trend-wrap">
+      <h3>Utilization Trend — Apr to Aug 2026</h3>
+      <div class="legend-strip">
+        <div class="legend-item"><div class="legend-dot" style="background:#1d4ed8"></div>DAIC Combined</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#059669"></div>Bitstrapped</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div>Badal</div>
+        <div class="legend-item" style="margin-left:auto;font-size:11px;color:#9ca3af;">Apr–May = Actuals &nbsp;|&nbsp; Jun = Current &nbsp;|&nbsp; Jul–Aug = Forecast</div>
+      </div>
+      <div class="trend-chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+
+    <!-- Monthly KPI strip -->
+    <div class="monthly-summary" id="monthlyKpis"></div>
+
+    <!-- Legend -->
+    <div class="legend-strip" style="margin-bottom:12px;">
+      <div class="legend-item"><div class="legend-dot dot-red"></div>Bench (0% allocated)</div>
+      <div class="legend-item"><div class="legend-dot dot-amber"></div>Partial (1–99% allocated)</div>
+      <div class="legend-item"><div class="legend-dot dot-green"></div>Fully Allocated (≥100%)</div>
+    </div>
+
+    <!-- Three columns -->
+    <div class="three-col" id="monthlyColumns"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- BENCH PANEL                                        -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="panel" id="panel-bench">
+    <div class="filter-bar">
+      <select id="benchCo" onchange="renderBench()"><option value="all">All Companies</option><option value="Bitstrapped">Bitstrapped</option><option value="Badal">Badal</option></select>
+      <select id="benchRole" onchange="renderBench()">
+        <option value="all">All Roles</option>
+        <option>AI Engineer</option><option>Data Engineer</option><option>Architect</option>
+        <option>Data Analyst</option><option>Software Engineer</option><option>DevOps Engineer</option>
+        <option>Full Stack Engineer</option><option>Data and AI Lead</option>
+      </select>
+      <select id="benchSvc" onchange="renderBench()">
+        <option value="all">All Service Lines</option>
+        <option>Data & AI Science</option><option>Data Engineering & Automation</option>
+        <option>Dev Ops Transformation</option><option>Delivery Leadership</option>
+      </select>
+      <input type="text" id="benchSearch" placeholder="🔍  Search name, role…" oninput="renderBench()"/>
+      <span class="results-count" id="benchCount"></span>
+    </div>
+    <div class="table-wrap">
+      <div class="tbl-header"><div class="tbl-title">Bench Resources — No Active Assignment Today</div></div>
+      <div class="tbl-scroll">
+        <table><thead><tr>
+          <th onclick="sortTable('bench',0)">Name ↕</th>
+          <th onclick="sortTable('bench',1)">Title ↕</th>
+          <th onclick="sortTable('bench',2)">Resource Role ↕</th>
+          <th onclick="sortTable('bench',3)">Company ↕</th>
+          <th onclick="sortTable('bench',4)">Service Line ↕</th>
+          <th onclick="sortTable('bench',5)">Region ↕</th>
+          <th onclick="sortTable('bench',6)">Country ↕</th>
+          <th>Next Assignment</th>
+          <th>SF Link</th>
+        </tr></thead>
+        <tbody id="benchTbody"></tbody></table>
+      </div>
+      <div class="pagination" id="benchPag"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- ALLOCATIONS PANEL                                  -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="panel" id="panel-alloc">
+    <div class="filter-bar">
+      <div class="sub-tab-bar">
+        <button class="sub-tab active" onclick="setAllocFilter('all',this)">All (116)</button>
+        <button class="sub-tab amber" onclick="setAllocFilter('partial',this)">⚡ Partial (&lt;100%)</button>
+        <button class="sub-tab green" onclick="setAllocFilter('full',this)">✓ Fully Allocated (≥100%)</button>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <select id="allocCo" onchange="renderAlloc()"><option value="all">All Companies</option><option value="Bitstrapped">Bitstrapped</option><option value="Badal">Badal</option></select>
+      <select id="allocSvc" onchange="renderAlloc()">
+        <option value="all">All Service Lines</option>
+        <option>Data & AI Science</option><option>Data Engineering & Automation</option>
+        <option>Dev Ops Transformation</option><option>Delivery Leadership</option><option>Business Development</option>
+      </select>
+      <select id="allocStatus" onchange="renderAlloc()"><option value="all">All Statuses</option><option>Scheduled</option><option>Tentative</option></select>
+      <input type="text" id="allocSearch" placeholder="🔍  Search name, project…" oninput="renderAlloc()"/>
+      <span class="results-count" id="allocCount"></span>
+    </div>
+    <div class="table-wrap">
+      <div class="tbl-header"><div class="tbl-title" id="allocTitle">All Allocations</div></div>
+      <div class="tbl-scroll">
+        <table><thead><tr>
+          <th onclick="sortTable('alloc',0)">Name ↕</th>
+          <th onclick="sortTable('alloc',1)">Title ↕</th>
+          <th onclick="sortTable('alloc',2)">Company ↕</th>
+          <th onclick="sortTable('alloc',3)">Project ↕</th>
+          <th onclick="sortTable('alloc',4)">Alloc % ↕</th>
+          <th onclick="sortTable('alloc',5)">Dates ↕</th>
+          <th onclick="sortTable('alloc',6)">Status ↕</th>
+          <th onclick="sortTable('alloc',7)">Service Line ↕</th>
+          <th onclick="sortTable('alloc',8)">Region ↕</th>
+          <th>SF</th>
+        </tr></thead>
+        <tbody id="allocTbody"></tbody></table>
+      </div>
+      <div class="pagination" id="allocPag"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- CHARTS PANEL                                       -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="panel" id="panel-charts">
+    <div class="charts-grid">
+      <div class="chart-card"><h3>Bitstrapped — Resource Role Breakdown (40 total)</h3><div class="chart-wrap"><canvas id="cBitRole"></canvas></div></div>
+      <div class="chart-card"><h3>Badal — Resource Role Breakdown (71 total)</h3><div class="chart-wrap"><canvas id="cBadalRole"></canvas></div></div>
+      <div class="chart-card"><h3>Bitstrapped — Allocations by Service Line</h3><div class="chart-wrap"><canvas id="cBitSvc"></canvas></div></div>
+      <div class="chart-card"><h3>Badal — Allocations by Service Line</h3><div class="chart-wrap"><canvas id="cBadalSvc"></canvas></div></div>
+      <div class="chart-card" style="grid-column:1/-1;"><h3>DAIC — Bench vs Active by Company (Today)</h3><div class="chart-wrap" style="height:160px;"><canvas id="cCompare"></canvas></div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// DATA
+// ════════════════════════════════════════════════════════
+const BENCH = [
+  { name:'David Paul', title:'Full Stack Engineer', role:'Full Stack Engineer', company:'Bitstrapped', svc:'Data & AI Science', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000eBmVVYA0' },
+  { name:'Hossein Rahimi', title:'Machine Learning Engineer', role:'AI Engineer', company:'Bitstrapped', svc:'Data & AI Science', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000eAsOMYA0' },
+  { name:'Udayapriya Ravikumar', title:'Senior Data Engineer', role:'Data Engineer', company:'Bitstrapped', svc:'Data Engineering & Automation', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000eBlnmYAC' },
+  { name:'Aditya Sharma', title:'Tech Lead', role:'Architect', company:'Badal', svc:'Delivery Leadership', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000YPXwTYAX' },
+  { name:'Ahmed Hussein', title:'BI Engineer', role:'Data Analyst', company:'Badal', svc:'Data Engineering & Automation', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000YPJALYA5' },
+  { name:'Colin Choi', title:'Focus Lead', role:'Data & AI Lead', company:'Badal', svc:'Data Engineering & Automation', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000aYezBYAS' },
+  { name:'David Barrera Gonzalez', title:'Senior Data Engineer', role:'Data Engineer', company:'Badal', svc:'Data Engineering & Automation', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000eAxOKYA0' },
+  { name:'Martin Allaire', title:'Platform Engineer', role:'Software Engineer', company:'Badal', svc:'Dev Ops Transformation', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000eBk0TYAS' },
+  { name:'Richard Peng', title:'Senior Platform Engineer', role:'DevOps Engineer', company:'Badal', svc:'Dev Ops Transformation', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000eBjMJYA0' },
+  { name:'Stuart Purgavie', title:'Senior Consultant', role:'Data and AI Lead', company:'Badal', svc:'Dev Ops Transformation', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000eBjMIYA0' },
+];
+
+const ALLOCS = [
+  { name:'Aaron Carter', title:'BI Solutions Lead', company:'Bitstrapped', project:'Basin Electric - DE/DM Staff Aug', alloc:15, start:'2026-04-01', end:'2026-08-21', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5lBYAS' },
+  { name:'Aaron Carter', title:'BI Solutions Lead', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:50, start:'2026-05-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SUZRYA4' },
+  { name:'Abhishek Kathuria', title:'Machine Learning Engineer', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QPysYAG' },
+  { name:'Adam Thorsteinson', title:'Head of Data Science & Advanced Analytics', company:'Bitstrapped', project:'Gemini Enterprise Agent Marketplace', alloc:50, start:'2026-05-25', end:'2026-06-30', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000T1VNYA0' },
+  { name:'Ahsan Khan', title:'ML Engineer', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQBlYAO' },
+  { name:'Akansha Sohal', title:'Intermediate Technical PM', company:'Bitstrapped', project:'Cameco - GCP Support 2026', alloc:10, start:'2025-12-22', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RY5dYAG' },
+  { name:'Akansha Sohal', title:'Intermediate Technical PM', company:'Bitstrapped', project:'Integral Engineering 2025', alloc:13, start:'2026-01-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QF3RYAW' },
+  { name:'Akansha Sohal', title:'Intermediate Technical PM', company:'Bitstrapped', project:'SpinMaster - Mini-COE', alloc:20, start:'2026-03-02', end:'2026-06-05', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Q3DZYA0' },
+  { name:'Alberto Marengo', title:'Machine Learning Engineer', company:'Bitstrapped', project:'Nova Scotia Health - Gemini Agents', alloc:100, start:'2026-04-15', end:'2026-06-21', status:'Scheduled', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Rc1BYAS' },
+  { name:'Beatrice Bu', title:'Senior ML Engineer', company:'Bitstrapped', project:'TELUS Digital - Time Off', alloc:100, start:'2026-03-01', end:'2026-06-12', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QEfFYAW' },
+  { name:'Bhushan Joshi', title:'Full Stack Engineer', company:'Bitstrapped', project:'Hearst 2 - AI', alloc:50, start:'2026-05-04', end:'2026-07-10', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000S8fNYAS' },
+  { name:'David Gleason', title:'Solution Architect', company:'Bitstrapped', project:'Nova Scotia Health - Gemini Agents', alloc:50, start:'2026-04-15', end:'2026-06-21', status:'Scheduled', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Rc1CYAS' },
+  { name:'David Gleason', title:'Solution Architect', company:'Bitstrapped', project:'Glaukos - RBAC', alloc:30, start:'2026-04-20', end:'2026-06-12', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SGOPYA4' },
+  { name:'David Gleason', title:'Solution Architect', company:'Bitstrapped', project:'Glaukos - Staff Aug', alloc:25, start:'2026-04-20', end:'2026-07-31', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SG1pYAG' },
+  { name:'Epson Heringer', title:'Senior ML Engineer', company:'Bitstrapped', project:'Mastercard - Satori Phase 2', alloc:100, start:'2026-05-18', end:'2026-06-30', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Sa3lYAC' },
+  { name:'Evan Marantz', title:'BI Engineer', company:'Bitstrapped', project:'Basin Electric - DE/DM Staff Aug', alloc:50, start:'2026-04-01', end:'2026-08-21', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5lCYAS' },
+  { name:'Evan Marantz', title:'BI Engineer', company:'Bitstrapped', project:'Nova Scotia Health - Gemini Agents', alloc:100, start:'2026-05-21', end:'2026-06-21', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SmmTYAS' },
+  { name:'Hardik Gupta', title:'Senior ML Engineer', company:'Bitstrapped', project:'SpinMaster - Mini-COE', alloc:10, start:'2026-03-02', end:'2026-06-05', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Q3ALYA0' },
+  { name:'Haris Ahmad', title:'Machine Learning Engineer', company:'Bitstrapped', project:'Livingston - 2026 Innovation', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQ3hYAG' },
+  { name:'Husnain Haider', title:'Senior ML Engineer', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQA9YAO' },
+  { name:'Joe Mwaura', title:'ML Engineer', company:'Bitstrapped', project:'UofC - Pause App', alloc:10, start:'2023-12-01', end:'2026-06-05', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QbC1YAK' },
+  { name:'Lakshay Wadhwa', title:'Cloud Architect', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:100, start:'2026-05-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SUcfYAG' },
+  { name:'Manik Deep Singh', title:'Senior Technical PM', company:'Bitstrapped', project:'Livingston - 2026 Leadership', alloc:10, start:'2026-04-01', end:'2026-12-31', status:'Tentative', svc:'Delivery Leadership', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R3ppYAC' },
+  { name:'Max Sossin', title:'Machine Learning Engineer', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQDNYA4' },
+  { name:'Monim Abdul', title:'Cloud Engineer', company:'Bitstrapped', project:'Glaukos - RBAC', alloc:50, start:'2026-04-20', end:'2026-06-12', status:'Tentative', svc:'Data & AI Science', region:'BD - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SGMnYAO' },
+  { name:'Monim Abdul', title:'Cloud Engineer', company:'Bitstrapped', project:'Glaukos - Staff Aug', alloc:50, start:'2026-04-20', end:'2026-07-31', status:'Tentative', svc:'Data & AI Science', region:'BD - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SG3RYAW' },
+  { name:'Naveena Chandwani', title:'Senior ML Engineer', company:'Bitstrapped', project:'Badal/Bitstrapped - PreSales', alloc:50, start:'2026-05-04', end:'2026-12-31', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SNsvYAG' },
+  { name:'Naveena Chandwani', title:'Senior ML Engineer', company:'Bitstrapped', project:'Mastercard - Satori Phase 2', alloc:100, start:'2026-05-18', end:'2026-06-26', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Sm89YAC' },
+  { name:'Omar AlSadi', title:'Full Stack Engineer', company:'Bitstrapped', project:'Livingston - 2026 Innovation', alloc:75, start:'2026-04-01', end:'2026-12-31', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QtwvYAC' },
+  { name:'Omar AlSadi', title:'Full Stack Engineer', company:'Bitstrapped', project:'UofC - Pause App', alloc:10, start:'2023-12-01', end:'2026-06-05', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Q5DlYAK' },
+  { name:'Parman Gill', title:'Full Stack Engineer', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:50, start:'2026-05-11', end:'2026-12-31', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SZxJYAW' },
+  { name:'Parman Gill', title:'Full Stack Engineer', company:'Bitstrapped', project:'Integral Engineering 2025', alloc:5, start:'2025-04-01', end:'2026-12-31', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RD7dYAG' },
+  { name:'Parsa Morsal', title:'Machine Learning Engineer', company:'Bitstrapped', project:'Gemini Enterprise Agent Marketplace', alloc:100, start:'2026-05-25', end:'2026-06-30', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000T0z7YAC' },
+  { name:'Sahil Handa', title:'Senior Technical Program Manager', company:'Bitstrapped', project:'Livingston - 2026 Leadership', alloc:50, start:'2026-04-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QvYvYAK' },
+  { name:'Saiful Azad', title:'Cloud Architect', company:'Bitstrapped', project:'Integral Engineering 2025', alloc:25, start:'2026-01-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'BD - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QF0DYAW' },
+  { name:'Saleem Chitrachedu', title:'Machine Learning Engineer', company:'Bitstrapped', project:'Northern Health - Chatbot', alloc:50, start:'2026-05-18', end:'2026-06-19', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SpCTYA0' },
+  { name:'Shougat Mahmud', title:'Full Stack Engineer', company:'Bitstrapped', project:'Integral Engineering 2025', alloc:100, start:'2026-01-01', end:'2026-12-31', status:'Tentative', svc:'Data & AI Science', region:'BD - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QEwzYAG' },
+  { name:'Siddharth Jha', title:'BI Engineer', company:'Bitstrapped', project:'Hearst 2 - AI', alloc:50, start:'2026-03-02', end:'2026-07-10', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5bcYAC' },
+  { name:'Siddharth Jha', title:'BI Engineer', company:'Bitstrapped', project:'Glaukos - Staff Aug', alloc:50, start:'2026-04-20', end:'2026-07-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SG0DYAW' },
+  { name:'Solomon Peter', title:'Senior Data Architect', company:'Bitstrapped', project:'Livingston - 2026 Innovation', alloc:50, start:'2026-04-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Qj6LYAS' },
+  { name:'Solomon Peter', title:'Senior Data Architect', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:50, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQJpYAO' },
+  { name:'Sonal Hansra', title:'Machine Learning Engineer', company:'Bitstrapped', project:'Livingston - 2026 Innovation', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQ5JYAW' },
+  { name:'Sunil Udhayakumar', title:'Engineering Lead, Cloud Architecture', company:'Bitstrapped', project:'ShopVision - AWS to GCP Migration', alloc:40, start:'2026-05-04', end:'2026-06-12', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SN4vYAG' },
+  { name:'Tanya Soni', title:'Senior ML Engineer', company:'Bitstrapped', project:'Hearst 2 - AI', alloc:50, start:'2026-03-02', end:'2026-07-10', status:'Tentative', svc:'Data & AI Science', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5bdYAC' },
+  { name:'Tarush Khatri', title:'Senior Data Engineer', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQ8XYAW' },
+  { name:'Tushar Joy', title:'Full Stack Engineer', company:'Bitstrapped', project:'Integral Engineering 2025', alloc:100, start:'2026-01-01', end:'2026-12-31', status:'Tentative', svc:'Data & AI Science', region:'BD - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QEybYAG' },
+  { name:'Veerendra Kakarla', title:'Senior Data Engineer', company:'Bitstrapped', project:'Livingston - 2026 Signal', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQEzYAO' },
+  // ── Badal ──
+  { name:'Akhil Jahagirdar', title:'Senior Platform Engineer', company:'Badal', project:'Dairy Queen - 2026 Loyalty Strategy', alloc:50, start:'2026-01-01', end:'2026-06-30', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000NjfZYAS' },
+  { name:'Alex Yun', title:'Senior Machine Learning Engineer', company:'Badal', project:'TELUS Digital - Time Off', alloc:100, start:'2026-02-02', end:'2026-06-21', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QD01YAG' },
+  { name:'Anand Menon Sreekumar', title:'Program Manager', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-03-23', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R3ufYAC' },
+  { name:'Andrew Carroll', title:'Staff Tech Lead', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-03-23', end:'2026-08-31', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R3t3YAC' },
+  { name:'Azhar Qureshi', title:'Senior Platform Engineer', company:'Badal', project:'Elm Street - GKE Modernization', alloc:100, start:'2026-04-27', end:'2026-06-08', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RovBYAS' },
+  { name:'Azhar Qureshi', title:'Senior Platform Engineer', company:'Badal', project:'University Pension Plan Ontario - MSP', alloc:5, start:'2026-06-01', end:'2026-07-04', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000PvO5YAK' },
+  { name:'Ben Wendt', title:'Tech Lead', company:'Badal', project:'CXAI - Conv. Agents - TELUS Public', alloc:100, start:'2026-04-27', end:'2026-07-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000S1fVYAS' },
+  { name:'Chidiebube Amos', title:'Senior Platform Engineer', company:'Badal', project:'ShopVision - AWS to GCP Migration', alloc:60, start:'2026-05-04', end:'2026-06-12', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000S8kDYAS' },
+  { name:'Damoon Azarpazhooh', title:'Tech Lead', company:'Badal', project:'Elm Street - GKE Modernization', alloc:50, start:'2026-04-27', end:'2026-06-08', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RovCYAS' },
+  { name:'Damoon Azarpazhooh', title:'Tech Lead', company:'Badal', project:'TA - TAC - Raleigh DC Migration', alloc:100, start:'2026-05-18', end:'2026-09-25', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SCXhYAO' },
+  { name:'Daniel Kulikov', title:'Senior Data Engineer', company:'Badal', project:'Dairy Queen - 2026 Loyalty Strategy', alloc:100, start:'2026-01-01', end:'2026-06-30', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000NT2zYAG' },
+  { name:'David Bembenek', title:'Tech Lead', company:'Badal', project:'TAC - Product Label Data Convergence 2', alloc:50, start:'2026-03-30', end:'2026-06-26', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QvvVYAS' },
+  { name:'Denys Roman', title:'Staff Tech Lead', company:'Badal', project:'Livingston - 2026 Signal', alloc:25, start:'2026-04-17', end:'2026-12-31', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RDafYAG' },
+  { name:'Denys Roman', title:'Staff Tech Lead', company:'Badal', project:'TELUS Digital - Project Detox', alloc:75, start:'2026-04-22', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RpG9YAK' },
+  { name:'Deval Arora', title:'Senior Data Engineer', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-05-18', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000StsnYAC' },
+  { name:'Diana Ratz', title:'Program Manager', company:'Badal', project:'Mastercard - Core Payments PM', alloc:100, start:'2025-11-03', end:'2026-07-03', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000HOE1YAO' },
+  { name:'Elmira Dossymova-Tleuberdinova', title:'BI Engineer', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-04-09', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RRtlYAG' },
+  { name:'Fatehpaul Dhaliwal', title:'Senior Platform Engineer', company:'Badal', project:'Cameco - GCP Support 2026', alloc:25, start:'2026-01-19', end:'2026-12-31', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000PzxxYAC' },
+  { name:'Hassan Najeeb', title:'Staff Engineer', company:'Badal', project:'Basin Electric - SAP DataSphere to BigQuery', alloc:50, start:'2026-04-28', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000S1cIYAS' },
+  { name:'Hassan Najeeb', title:'Staff Engineer', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-05-21', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SmUjYAK' },
+  { name:'Ilya Ovsyannikov', title:'Machine Learning Engineer', company:'Badal', project:'Hearst 2 - AI', alloc:50, start:'2026-03-02', end:'2026-07-10', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5bXYAS' },
+  { name:'Jackson Feist', title:'Tech Lead', company:'Badal', project:'TAC - Product Label Data Convergence 2', alloc:100, start:'2026-03-30', end:'2026-06-26', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Qvx7YAC' },
+  { name:'Jonathan Laberge', title:'Tech Lead', company:'Badal', project:'CBOE - Global Clearing Platform', alloc:100, start:'2026-03-18', end:'2026-09-18', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5BhYAK' },
+  { name:'Kevin Ravichandran', title:'Project Manager', company:'Badal', project:'Glaukos - Staff Aug', alloc:10, start:'2026-04-20', end:'2026-07-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SFybYAG' },
+  { name:'Kevin Ravichandran', title:'Project Manager', company:'Badal', project:'Glaukos - RBAC', alloc:30, start:'2026-04-20', end:'2026-06-12', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SGLBYA4' },
+  { name:'Kevin Ravichandran', title:'Project Manager', company:'Badal', project:'TELUS Health - DCM - PS Suite Migration', alloc:100, start:'2026-06-01', end:'2026-11-30', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RI8vYAG' },
+  { name:'Liam Helmer', title:'Senior Consultant', company:'Badal', project:'CBOE - Global Clearing Platform', alloc:100, start:'2026-03-18', end:'2026-09-18', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5BiYAK' },
+  { name:'Manas Narkar', title:'Senior Consultant', company:'Badal', project:'Telus Digital - Modern Data Stack DBT', alloc:50, start:'2026-03-02', end:'2026-06-30', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QFWTYA4' },
+  { name:'Massy Farkhondehkavaki', title:'BI Engineer', company:'Badal', project:'Livingston - 2026 Innovation', alloc:100, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QpIDYA0' },
+  { name:'Mateko Azu', title:'Senior Project Manager', company:'Badal', project:'TELUS Digital - Time Off', alloc:100, start:'2026-03-01', end:'2026-09-01', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QD9hYAG' },
+  { name:'Michael May', title:'Contingent Unmapped', company:'Badal', project:'Dairy Queen - 2026 Loyalty Strategy', alloc:50, start:'2026-01-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000NT32YAG' },
+  { name:'Mohammed Saddam Khan', title:'Senior Data Engineer', company:'Badal', project:'Dairy Queen - 2026 Loyalty Strategy', alloc:100, start:'2026-04-06', end:'2026-06-30', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QblVYAS' },
+  { name:'Nathan Bugden', title:'Senior Consultant', company:'Badal', project:'CBOE - Global Clearing Platform', alloc:80, start:'2026-03-18', end:'2026-09-18', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5BjYAK' },
+  { name:'Nikita Volynets', title:'Senior BI Engineer', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-04-14', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RZT7YAO' },
+  { name:'Nikita Volynets', title:'Senior BI Engineer', company:'Badal', project:'Telus Digital - Modern Data Stack DBT', alloc:100, start:'2026-03-02', end:'2026-06-30', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QFY5YAO' },
+  { name:'Nimmy Thomas', title:'Senior Consultant', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-05-04', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000S3FtYAK' },
+  { name:'Nimra Saeed', title:'Project Manager', company:'Badal', project:'TELUS Digital - Time Off', alloc:100, start:'2026-03-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QDEXYA4' },
+  { name:'Punithan Muniyandy', title:'Senior Platform Engineer', company:'Badal', project:'CXAI - TCS Channel Intelligence', alloc:100, start:'2026-04-02', end:'2027-01-26', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RQJNYA4' },
+  { name:'Raphael Blankson', title:'Senior Data Engineer', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-05-21', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SmRVYA0' },
+  { name:'Raymond Dang', title:'Platform Engineer', company:'Badal', project:'Cameco - GCP Support 2026', alloc:25, start:'2026-03-02', end:'2026-12-31', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Pr5xYAC' },
+  { name:'Raymond Simm', title:'Senior Consultant', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-03-30', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R3rRYAS' },
+  { name:'Rohan Ohol', title:'Tech Lead', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-04-13', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RRs9YAG' },
+  { name:'Ron Yosipovich', title:'Software Engineer', company:'Badal', project:'Dairy Queen - 2026 Loyalty Strategy', alloc:100, start:'2026-01-01', end:'2026-12-31', status:'Tentative', svc:'Dev Ops Transformation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000NdyLYAS' },
+  { name:'Rosalind Ng', title:'Senior Data Engineer', company:'Badal', project:'TELUS Digital - Time Off', alloc:100, start:'2026-03-01', end:'2026-10-03', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QDHlYAO' },
+  { name:'Roshni Ravoof', title:'Tech Lead', company:'Badal', project:'TELUS Digital - Time Off', alloc:100, start:'2026-06-01', end:'2026-06-12', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Q4XqYAK' },
+  { name:'Sergei Iarymov', title:'Senior Data Engineer', company:'Badal', project:'Basin Electric - SAP DataSphere to BigQuery', alloc:100, start:'2026-05-24', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RzllYAC' },
+  { name:'Sergei Iarymov', title:'Senior Data Engineer', company:'Badal', project:'TAC - Product Label Data Convergence 2', alloc:25, start:'2026-03-30', end:'2026-06-26', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R2XBYA0' },
+  { name:'Seva Miheyev', title:'Contingent Unmapped', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-04-01', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RDqnYAG' },
+  { name:'Stacy Ewah', title:'Senior Project Manager', company:'Badal', project:'Compendium', alloc:50, start:'2026-05-25', end:'2026-08-25', status:'Tentative', svc:'Business Development', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000T1OvYAK' },
+  { name:'Stacy Ewah', title:'Senior Project Manager', company:'Badal', project:'Basin Electric - DE/DM Staff Aug', alloc:13, start:'2026-03-02', end:'2026-08-21', status:'Tentative', svc:'Business Development', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5lEYAS' },
+  { name:'Stacy Ewah', title:'Senior Project Manager', company:'Badal', project:'CBOE - Global Clearing Platform', alloc:10, start:'2026-03-18', end:'2026-09-18', status:'Tentative', svc:'Business Development', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R5BkYAK' },
+  { name:'Stacy Ewah', title:'Senior Project Manager', company:'Badal', project:'Basin Electric - SAP DataSphere to BigQuery', alloc:30, start:'2026-04-27', end:'2026-12-31', status:'Tentative', svc:'Business Development', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000Rzk9YAC' },
+  { name:'Stephen Lang', title:'Senior Data Engineer', company:'Badal', project:'Basin Electric - SAP DataSphere to BigQuery', alloc:100, start:'2026-05-08', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000SAVtYAO' },
+  { name:'Steven Deutscher-Kobayashi', title:'Focus Lead', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-03-23', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R4txYAC' },
+  { name:'Swapnendu Dash', title:'Senior Data Engineer', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-04-01', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000R3wHYAS' },
+  { name:'Tamara Hrytsyk', title:'Tech Lead', company:'Badal', project:'TELUS Digital - Time Off', alloc:100, start:'2026-04-28', end:'2026-10-11', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RmLVYA0' },
+  { name:'Vivek Rautela', title:'Senior Project Manager', company:'Badal', project:'Livingston - 2026 Innovation', alloc:50, start:'2026-04-01', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000QQ6vYAG' },
+  { name:'Vivek Rautela', title:'Senior Project Manager', company:'Badal', project:'Livingston - 2026 Signal', alloc:25, start:'2026-04-01', end:'2026-12-31', status:'Scheduled', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RDZ3YAO' },
+  { name:'Yash Shastri', title:'Project Manager', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, start:'2026-04-01', end:'2026-08-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000RDQzYAO' },
+  { name:'Yuval Yakubov', title:'Senior Platform Engineer', company:'Badal', project:'Basin Electric - SAP DataSphere to BigQuery', alloc:100, start:'2026-05-08', end:'2026-12-31', status:'Tentative', svc:'Data Engineering & Automation', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/a97TS000000S1dtYAC' },
+];
+
+// ════════════════════════════════════════════════════════
+// MASTER PEOPLE LIST  (union of bench + alloc sources)
+// ════════════════════════════════════════════════════════
+function buildPeople() {
+  const map = {};
+  BENCH.forEach(p => { map[p.name] = { name:p.name, title:p.title, company:p.company, svc:p.svc }; });
+  ALLOCS.forEach(a => { if (!map[a.name]) map[a.name] = { name:a.name, title:a.title, company:a.company, svc:a.svc }; });
+  return Object.values(map);
+}
+const PEOPLE = buildPeople();
+
+// ════════════════════════════════════════════════════════
+// MONTHLY CALCULATION ENGINE
+// ════════════════════════════════════════════════════════
+const MONTHS = [
+  { key:'2026-04', label:'April 2026',  type:'actuals',  start:'2026-04-01', end:'2026-04-30' },
+  { key:'2026-05', label:'May 2026',    type:'actuals',  start:'2026-05-01', end:'2026-05-31' },
+  { key:'2026-06', label:'June 2026',   type:'current',  start:'2026-06-01', end:'2026-06-30' },
+  { key:'2026-07', label:'July 2026',   type:'forecast', start:'2026-07-01', end:'2026-07-31' },
+  { key:'2026-08', label:'August 2026', type:'forecast', start:'2026-08-01', end:'2026-08-31' },
+];
+
+function overlaps(a, mStart, mEnd) {
+  return a.start <= mEnd && a.end >= mStart;
+}
+
+function calcMonthForPerson(name, mStart, mEnd) {
+  const myAllocs = ALLOCS.filter(a => a.name === name && overlaps(a, mStart, mEnd));
+  const total = myAllocs.reduce((s, a) => s + a.alloc, 0);
+  return { total, allocs: myAllocs };
+}
+
+function calcMonthStats(mKey, coFilter) {
+  const m = MONTHS.find(x => x.key === mKey);
+  let people = PEOPLE;
+  if (coFilter !== 'all') people = people.filter(p => p.company === coFilter);
+
+  const bench = [], partial = [], full = [];
+  people.forEach(p => {
+    const { total, allocs } = calcMonthForPerson(p.name, m.start, m.end);
+    const entry = { ...p, totalAlloc: total, allocs };
+    if (total === 0) bench.push(entry);
+    else if (total < 100) partial.push(entry);
+    else full.push(entry);
+  });
+
+  const utilPct = people.length ? Math.round(((people.length - bench.length) / people.length) * 100) : 0;
+  return { bench, partial, full, total: people.length, utilPct, m };
+}
+
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+let activeMonth = '2026-06';
+let allocFilter = 'all';
+const sortState = { bench: { col:0, dir:1 }, alloc: { col:0, dir:1 } };
+const pageState = { bench:1, alloc:1 };
+const PAGE = 20;
+
+// ════════════════════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════════════════════
+function switchTab(e, name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  e.target.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'charts') renderCharts();
+}
+
+// ════════════════════════════════════════════════════════
+// MONTH SELECTOR
+// ════════════════════════════════════════════════════════
+function selectMonth(btn, key) {
+  document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeMonth = key;
+  renderMonthly();
+}
+
+// ════════════════════════════════════════════════════════
+// MONTHLY VIEW
+// ════════════════════════════════════════════════════════
+function renderMonthly() {
+  const co = document.getElementById('monthCo').value;
+  const stats = calcMonthStats(activeMonth, co);
+
+  // KPI strip
+  const fillCls = stats.utilPct >= 85 ? 'fill-green' : stats.utilPct >= 70 ? 'fill-amber' : 'fill-red';
+  const valCls = stats.utilPct >= 85 ? 'green' : stats.utilPct >= 70 ? 'amber' : 'red';
+  document.getElementById('monthlyKpis').innerHTML = `
+    <div class="mscard"><div class="mscard-val blue">${stats.total}</div><div class="mscard-lbl">Total People</div></div>
+    <div class="mscard"><div class="mscard-val ${valCls}">${stats.utilPct}%</div><div class="mscard-lbl">Utilization</div></div>
+    <div class="mscard"><div class="mscard-val red">${stats.bench.length}</div><div class="mscard-lbl">On Bench</div></div>
+    <div class="mscard"><div class="mscard-val amber">${stats.partial.length}</div><div class="mscard-lbl">Partially Allocated</div></div>
+    <div class="mscard"><div class="mscard-val green">${stats.full.length}</div><div class="mscard-lbl">Fully Allocated</div></div>
+  `;
+
+  // Three columns
+  document.getElementById('monthlyColumns').innerHTML = `
+    <div class="col-card col-bench">
+      <div class="col-header">
+        <span class="col-title">🔴 On Bench</span>
+        <span class="col-count">${stats.bench.length} people</span>
+      </div>
+      <div class="col-body">${stats.bench.map(p => personCard(p, 'bench')).join('') || '<div class="empty">No one on bench this month 🎉</div>'}</div>
+    </div>
+    <div class="col-card col-partial">
+      <div class="col-header">
+        <span class="col-title">⚡ Partially Allocated</span>
+        <span class="col-count">${stats.partial.length} people</span>
+      </div>
+      <div class="col-body">${stats.partial.map(p => personCard(p, 'partial')).join('') || '<div class="empty">No partial allocations</div>'}</div>
+    </div>
+    <div class="col-card col-full">
+      <div class="col-header">
+        <span class="col-title">✅ Fully Allocated</span>
+        <span class="col-count">${stats.full.length} people</span>
+      </div>
+      <div class="col-body">${stats.full.map(p => personCard(p, 'full')).join('') || '<div class="empty">No full allocations</div>'}</div>
+    </div>
+  `;
+
+  renderTrend(co);
+}
+
+function personCard(p, type) {
+  const initials = p.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const avCls = p.company === 'Bitstrapped' ? 'av-bit' : 'av-badal';
+  const pctCls = type === 'bench' ? 'pct-zero' : type === 'partial' ? 'pct-partial' : 'pct-full';
+  const coBadge = p.company === 'Bitstrapped'
+    ? '<span class="pill pill-bit" style="font-size:9px;padding:1px 5px;">BIT</span>'
+    : '<span class="pill pill-badal" style="font-size:9px;padding:1px 5px;">BAD</span>';
+  const projTags = p.allocs && p.allocs.length
+    ? p.allocs.map(a => `<span class="proj-tag" title="${a.project}">${a.project}</span>`).join('')
+    : '';
+  const pctBadge = type !== 'bench'
+    ? `<span class="alloc-pct ${pctCls}">${p.totalAlloc}%</span>`
+    : `<span class="alloc-pct pct-zero">0%</span>`;
+  return `
+    <div class="person-row">
+      <div class="person-avatar ${avCls}">${initials}</div>
+      <div class="person-info">
+        <div class="person-name">${p.name}</div>
+        <div class="person-title">${p.title}</div>
+        <div class="person-meta">${coBadge}${pctBadge}${projTags}</div>
+      </div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// TREND CHART
+// ════════════════════════════════════════════════════════
+let trendChart = null;
+function renderTrend(co) {
+  const labels = MONTHS.map(m => m.label.split(' ')[0]);
+  const daic = [], bit = [], badal = [];
+
+  MONTHS.forEach(m => {
+    const s = calcMonthStats(m.key, co === 'all' ? 'all' : co);
+    daic.push(s.utilPct);
+    if (co === 'all') {
+      const sb = calcMonthStats(m.key, 'Bitstrapped');
+      const sd = calcMonthStats(m.key, 'Badal');
+      bit.push(sb.utilPct);
+      badal.push(sd.utilPct);
+    }
+  });
+
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  const ctx = document.getElementById('trendChart').getContext('2d');
+
+  const datasets = co === 'all' ? [
+    { label:'DAIC Combined', data:daic, borderColor:'#1d4ed8', backgroundColor:'rgba(29,78,216,0.08)', tension:0.3, pointRadius:5, pointBackgroundColor:'#1d4ed8', fill:false },
+    { label:'Bitstrapped', data:bit, borderColor:'#059669', backgroundColor:'rgba(5,150,105,0.05)', tension:0.3, pointRadius:5, pointBackgroundColor:'#059669', fill:false, borderDash:[4,3] },
+    { label:'Badal', data:badal, borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,0.05)', tension:0.3, pointRadius:5, pointBackgroundColor:'#7c3aed', fill:false, borderDash:[4,3] },
+  ] : [
+    { label: co, data:daic, borderColor:'#1d4ed8', backgroundColor:'rgba(29,78,216,0.1)', tension:0.3, pointRadius:5, pointBackgroundColor:'#1d4ed8', fill:true },
+  ];
+
+  // Vertical divider between May and June (actuals vs forecast)
+  const dividerPlugin = {
+    id: 'divider',
+    afterDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      // Draw between index 1 (May) and 2 (Jun)
+      const x1 = scales.x.getPixelForValue(1);
+      const x2 = scales.x.getPixelForValue(2);
+      const xMid = (x1 + x2) / 2;
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = '#d1d5db';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(xMid, chartArea.top);
+      ctx.lineTo(xMid, chartArea.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('← Actuals | Forecast →', xMid, chartArea.top - 6);
+      ctx.restore();
+    }
+  };
+
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { min: 0, max: 100, ticks: { callback: v => v+'%', font:{size:11} }, grid:{color:'#f3f4f6'} },
+        x: { ticks: { font:{size:11} }, grid:{display:false} }
+      },
+      plugins: {
+        legend: { position:'top', labels:{font:{size:11}, padding:16} },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}%` } }
+      }
+    },
+    plugins: [dividerPlugin]
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// BENCH TABLE
+// ════════════════════════════════════════════════════════
+function renderBench() {
+  const co = document.getElementById('benchCo').value;
+  const role = document.getElementById('benchRole').value;
+  const svc = document.getElementById('benchSvc').value;
+  const q = document.getElementById('benchSearch').value.toLowerCase();
+  let data = BENCH.filter(r =>
+    (co==='all'||r.company===co) && (role==='all'||r.role===role) &&
+    (svc==='all'||r.svc===svc) &&
+    (!q||`${r.name} ${r.title} ${r.role} ${r.svc}`.toLowerCase().includes(q))
+  );
+  const keys = ['name','title','role','company','svc','region','country','next'];
+  const sc = sortState.bench;
+  data.sort((a,b)=>((a[keys[sc.col]]||'').localeCompare(b[keys[sc.col]]||''))*sc.dir);
+  document.getElementById('benchCount').textContent = `${data.length} result${data.length!==1?'s':''}`;
+  const pages = Math.ceil(data.length/PAGE)||1;
+  if(pageState.bench>pages) pageState.bench=1;
+  const slice = data.slice((pageState.bench-1)*PAGE, pageState.bench*PAGE);
+  document.getElementById('benchTbody').innerHTML = slice.length
+    ? slice.map(r=>`<tr>
+        <td><div class="name-cell">${r.name}</div></td>
+        <td>${r.title}</td><td>${r.role}</td>
+        <td><span class="pill ${r.company==='Bitstrapped'?'pill-bit':'pill-badal'}">${r.company}</span></td>
+        <td>${r.svc}</td><td>${r.region}</td><td>${r.country}</td>
+        <td><span class="pill pill-bench">None scheduled</span></td>
+        <td><a class="sf-link" href="${r.url}" target="_blank">↗ Open</a></td>
+      </tr>`).join('')
+    : '<tr><td colspan="9" class="empty">No results.</td></tr>';
+  renderPagination('bench', pages, data.length);
+  updateSortIcons('bench', 'benchTable');
+}
+
+// ════════════════════════════════════════════════════════
+// ALLOCATIONS TABLE
+// ════════════════════════════════════════════════════════
+function setAllocFilter(f, btn) {
+  allocFilter = f;
+  document.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  const titles = { all:'All Allocations', partial:'Partially Allocated (Alloc < 100%)', full:'Fully Allocated (Alloc ≥ 100%)' };
+  document.getElementById('allocTitle').textContent = titles[f];
+  pageState.alloc = 1;
+  renderAlloc();
+}
+
+function renderAlloc() {
+  const co = document.getElementById('allocCo').value;
+  const svc = document.getElementById('allocSvc').value;
+  const status = document.getElementById('allocStatus').value;
+  const q = document.getElementById('allocSearch').value.toLowerCase();
+  let data = ALLOCS.filter(r =>
+    (co==='all'||r.company===co) && (svc==='all'||r.svc===svc) &&
+    (status==='all'||r.status===status) &&
+    (allocFilter==='all'||(allocFilter==='partial'&&r.alloc<100)||(allocFilter==='full'&&r.alloc>=100)) &&
+    (!q||`${r.name} ${r.project} ${r.title} ${r.svc}`.toLowerCase().includes(q))
+  );
+  const keys = ['name','title','company','project','alloc','start','status','svc','region'];
+  const sc = sortState.alloc;
+  data.sort((a,b)=>{
+    const av = sc.col===4?a.alloc:(a[keys[sc.col]]||'').toString();
+    const bv = sc.col===4?b.alloc:(b[keys[sc.col]]||'').toString();
+    return (sc.col===4?av-bv:av.localeCompare(bv))*sc.dir;
+  });
+  document.getElementById('allocCount').textContent = `${data.length} allocation${data.length!==1?'s':''}`;
+  const pages = Math.ceil(data.length/PAGE)||1;
+  if(pageState.alloc>pages) pageState.alloc=1;
+  const slice = data.slice((pageState.alloc-1)*PAGE, pageState.alloc*PAGE);
+  const fillCls = r => r.alloc>=100?'alloc-fill-green':'alloc-fill-amber';
+  const pctPill = r => r.alloc>=100
+    ? '<span class="pill pill-full" style="font-size:10px;">Full</span>'
+    : '<span class="pill pill-partial" style="font-size:10px;">Partial</span>';
+  document.getElementById('allocTbody').innerHTML = slice.length
+    ? slice.map(r=>`<tr>
+        <td><div class="name-cell">${r.name}</div></td>
+        <td><div style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.title}">${r.title}</div></td>
+        <td><span class="pill ${r.company==='Bitstrapped'?'pill-bit':'pill-badal'}">${r.company}</span></td>
+        <td><div style="max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.project}">${r.project}</div></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-weight:800;min-width:32px;">${r.alloc}%</span>
+            <div class="alloc-bar" style="flex:1;min-width:48px;"><div class="${fillCls(r)}" style="width:${Math.min(r.alloc,100)}%"></div></div>
+            ${pctPill(r)}
+          </div>
+        </td>
+        <td><span style="font-size:11px;white-space:nowrap;">${r.start} → ${r.end}</span></td>
+        <td><span class="pill ${r.status==='Scheduled'?'pill-scheduled':'pill-tentative'}">${r.status}</span></td>
+        <td><div style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.svc}">${r.svc}</div></td>
+        <td>${r.region}</td>
+        <td><a class="sf-link" href="${r.url}" target="_blank">↗</a></td>
+      </tr>`).join('')
+    : '<tr><td colspan="10" class="empty">No allocations match.</td></tr>';
+  renderPagination('alloc', pages, data.length);
+  updateSortIcons('alloc', 'allocTable');
+}
+
+// ════════════════════════════════════════════════════════
+// SORT & PAGINATION HELPERS
+// ════════════════════════════════════════════════════════
+function sortTable(tbl, col) {
+  if(sortState[tbl].col===col) sortState[tbl].dir*=-1;
+  else { sortState[tbl].col=col; sortState[tbl].dir=1; }
+  pageState[tbl]=1;
+  tbl==='bench'?renderBench():renderAlloc();
+}
+function updateSortIcons(tbl, tableId) {
+  const sc = sortState[tbl];
+  document.querySelectorAll(`#panel-${tbl} thead th`).forEach((th,i)=>{
+    th.classList.toggle('sorted', i===sc.col);
+    const t = th.textContent.replace(/[↕↑↓]/g,'').trim();
+    th.textContent = t + (i===sc.col ? (sc.dir===1?' ↑':' ↓') : ' ↕');
+    if(th.onclick) {} // keep onclick
+  });
+}
+function renderPagination(tbl, pages, total) {
+  const cur = pageState[tbl];
+  const start=(cur-1)*PAGE+1, end=Math.min(cur*PAGE,total);
+  const pag = document.getElementById(tbl+'Pag');
+  if(!total){pag.innerHTML='';return;}
+  let btns='';
+  for(let i=1;i<=pages;i++){
+    if(i===1||i===pages||Math.abs(i-cur)<=1) btns+=`<button class="page-btn ${i===cur?'active':''}" onclick="goPage('${tbl}',${i})">${i}</button>`;
+    else if(Math.abs(i-cur)===2) btns+=`<span style="padding:4px 2px;color:#9ca3af">…</span>`;
+  }
+  pag.innerHTML=`<span>Showing ${start}–${end} of ${total}</span><div class="page-btns">${btns}</div>`;
+}
+function goPage(tbl,p){pageState[tbl]=p;tbl==='bench'?renderBench():renderAlloc();}
+
+// ════════════════════════════════════════════════════════
+// CHARTS
+// ════════════════════════════════════════════════════════
+const PALETTE = ['#1d4ed8','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#be185d','#65a30d','#c2410c','#0f766e','#6d28d9','#1e40af'];
+const chartInstances = {};
+function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];}}
+
+function renderCharts() {
+  const bitRoles = {'AI Engineer':17,'Full Stack Engineer':6,'Analytics Architect':3,'Data Engineer':3,'Delivery Lead':2,'Solutions Architect':2,'Data and AI Lead':2,'Cloud Engineer':1,'Director':1,'Other':3};
+  const badalRoles = {'PSA User':12,'Architect':11,'Data Engineer':11,'Delivery Lead':8,'DevOps Engineer':7,'Data Analyst':6,'Data Architect':3,'Data & AI Lead':3,'Cloud Engineer':3,'AI Engineer':2,'Software Engineer':2,'Solutions Architect':1};
+  const bitSvc={}, badalSvc={};
+  ALLOCS.filter(a=>a.company==='Bitstrapped').forEach(a=>{ bitSvc[a.svc]=(bitSvc[a.svc]||0)+1; });
+  ALLOCS.filter(a=>a.company==='Badal').forEach(a=>{ badalSvc[a.svc]=(badalSvc[a.svc]||0)+1; });
+  makeDonut('cBitRole', bitRoles);
+  makeDonut('cBadalRole', badalRoles);
+  makeHBar('cBitSvc', bitSvc, '#1d4ed8');
+  makeHBar('cBadalSvc', badalSvc, '#7c3aed');
+  destroyChart('cCompare');
+  const ctx = document.getElementById('cCompare').getContext('2d');
+  chartInstances['cCompare'] = new Chart(ctx,{type:'bar',data:{labels:['Bitstrapped','Badal'],datasets:[
+    {label:'Active',data:[37,64],backgroundColor:'#059669',borderRadius:6},
+    {label:'On Bench',data:[3,7],backgroundColor:'#dc2626',borderRadius:6}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{x:{stacked:true},y:{stacked:true}}}});
+}
+function makeDonut(id,data){
+  destroyChart(id);
+  const labels=Object.keys(data),values=Object.values(data);
+  const ctx=document.getElementById(id).getContext('2d');
+  chartInstances[id]=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data:values,backgroundColor:PALETTE.slice(0,labels.length),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:10},padding:8,boxWidth:12}}}}});
+}
+function makeHBar(id,dataMap,color){
+  destroyChart(id);
+  const sorted=Object.entries(dataMap).sort((a,b)=>b[1]-a[1]);
+  const ctx=document.getElementById(id).getContext('2d');
+  chartInstances[id]=new Chart(ctx,{type:'bar',data:{labels:sorted.map(e=>e[0]),datasets:[{data:sorted.map(e=>e[1]),backgroundColor:color,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
+}
+
+// ════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════
+document.getElementById('asOf').textContent = 'Data as of: 2 June 2026';
+renderMonthly();
+renderBench();
+renderAlloc();
+</script>
+</body>
+</html>
