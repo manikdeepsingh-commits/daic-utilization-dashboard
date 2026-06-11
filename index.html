@@ -658,10 +658,12 @@ function calcMonthStats(mKey, coFilter) {
   });
 
   const utilPct    = people.length ? Math.round(((people.length - bench.length) / people.length) * 100) : 0;
+  // Round first three; derive unallocated as residual so all four always sum to 100
   const avgBill    = avg(billPcts);
   const avgCred    = avg(credPcts);
   const avgNonBill = avg(nonBillPcts);
-  return { bench, partial, full, total: people.length, utilPct, avgBill, avgCred, avgNonBill, m };
+  const avgUnalloc = Math.max(0, 100 - avgBill - avgCred - avgNonBill);
+  return { bench, partial, full, total: people.length, utilPct, avgBill, avgCred, avgNonBill, avgUnalloc, m };
 }
 
 // ════════════════════════════════════════════════════════
@@ -701,15 +703,16 @@ function renderMonthly() {
   const co = document.getElementById('monthCo').value;
   const stats = calcMonthStats(activeMonth, co);
 
-  // KPI strip
+  // KPI strip — 4 capacity tiles sum to 100% + headcount tiles
   document.getElementById('monthlyKpis').innerHTML = `
     <div class="mscard"><div class="mscard-val blue">${stats.total}</div><div class="mscard-lbl">Total People</div></div>
-    <div class="mscard"><div class="mscard-val green">${stats.avgBill}%</div><div class="mscard-lbl">💰 Billable Util</div></div>
-    <div class="mscard"><div class="mscard-val amber">${stats.avgCred}%</div><div class="mscard-lbl">🔶 Credited Util</div></div>
-    <div class="mscard"><div class="mscard-val" style="color:#6b7280">${stats.avgNonBill}%</div><div class="mscard-lbl">⬜ Non-Billable</div></div>
-    <div class="mscard"><div class="mscard-val red">${stats.bench.length}</div><div class="mscard-lbl">On Bench</div></div>
-    <div class="mscard"><div class="mscard-val amber">${stats.partial.length}</div><div class="mscard-lbl">Partially Alloc.</div></div>
-    <div class="mscard"><div class="mscard-val green">${stats.full.length}</div><div class="mscard-lbl">Fully Allocated</div></div>
+    <div class="mscard" title="Avg billable allocation % across all ${stats.total} people"><div class="mscard-val green">${stats.avgBill}%</div><div class="mscard-lbl">💰 Billable</div></div>
+    <div class="mscard" title="Avg credited allocation % across all ${stats.total} people"><div class="mscard-val amber">${stats.avgCred}%</div><div class="mscard-lbl">🔶 Credited</div></div>
+    <div class="mscard" title="Avg non-billable (PTO/time-off) allocation % across all ${stats.total} people"><div class="mscard-val" style="color:#6b7280">${stats.avgNonBill}%</div><div class="mscard-lbl">⬜ Non-Billable</div></div>
+    <div class="mscard" title="Remaining unallocated capacity — these four always sum to 100%"><div class="mscard-val red">${stats.avgUnalloc}%</div><div class="mscard-lbl">🔲 Unallocated</div></div>
+    <div class="mscard" style="border-left:2px solid #e5e7eb;padding-left:12px"><div class="mscard-val red">${stats.bench.length}</div><div class="mscard-lbl">On Bench</div></div>
+    <div class="mscard"><div class="mscard-val amber">${stats.partial.length}</div><div class="mscard-lbl">Partial</div></div>
+    <div class="mscard"><div class="mscard-val green">${stats.full.length}</div><div class="mscard-lbl">Fully Alloc.</div></div>
   `;
 
   // Three columns
@@ -776,19 +779,20 @@ function personCard(p, type) {
 let trendChart = null;
 function renderTrend(co) {
   const labels = MONTHS.map(m => m.label.split(' ')[0]);
-  const bill = [], cred = [], nonB = [];
-  const billBit = [], credBit = [], billBadal = [], credBadal = [];
+  const bill = [], cred = [], nonB = [], unalloc = [];
+  const billBit = [], billBadal = [];
 
   MONTHS.forEach(m => {
     const s = calcMonthStats(m.key, co === 'all' ? 'all' : co);
     bill.push(s.avgBill);
     cred.push(s.avgCred);
     nonB.push(s.avgNonBill);
+    unalloc.push(s.avgUnalloc);
     if (co === 'all') {
       const sb = calcMonthStats(m.key, 'Bitstrapped');
       const sd = calcMonthStats(m.key, 'Badal');
-      billBit.push(sb.avgBill); credBit.push(sb.avgCred);
-      billBadal.push(sd.avgBill); credBadal.push(sd.avgCred);
+      billBit.push(sb.avgBill);
+      billBadal.push(sd.avgBill);
     }
   });
 
@@ -796,15 +800,17 @@ function renderTrend(co) {
   const ctx = document.getElementById('trendChart').getContext('2d');
 
   const datasets = co === 'all' ? [
-    { label:'Billable (DAIC)',     data:bill,  borderColor:'#059669', backgroundColor:'rgba(5,150,105,0.08)',   tension:0.3, pointRadius:5, pointBackgroundColor:'#059669', fill:false },
-    { label:'Credited (DAIC)',     data:cred,  borderColor:'#d97706', backgroundColor:'rgba(217,119,6,0.08)',   tension:0.3, pointRadius:5, pointBackgroundColor:'#d97706', fill:false },
-    { label:'Non-Billable (DAIC)', data:nonB,  borderColor:'#9ca3af', backgroundColor:'rgba(156,163,175,0.08)', tension:0.3, pointRadius:5, pointBackgroundColor:'#9ca3af', fill:false, borderDash:[3,3] },
-    { label:'Billable (BIT)',      data:billBit, borderColor:'#059669', tension:0.3, pointRadius:4, pointBackgroundColor:'#059669', fill:false, borderDash:[5,3], borderWidth:1.5 },
-    { label:'Billable (Badal)',    data:billBadal, borderColor:'#7c3aed', tension:0.3, pointRadius:4, pointBackgroundColor:'#7c3aed', fill:false, borderDash:[5,3], borderWidth:1.5 },
+    { label:'💰 Billable (DAIC)',     data:bill,    borderColor:'#059669', tension:0.3, pointRadius:5, fill:false },
+    { label:'🔶 Credited (DAIC)',     data:cred,    borderColor:'#d97706', tension:0.3, pointRadius:5, fill:false },
+    { label:'⬜ Non-Billable (DAIC)', data:nonB,    borderColor:'#9ca3af', tension:0.3, pointRadius:5, fill:false, borderDash:[3,3] },
+    { label:'🔲 Unallocated (DAIC)',  data:unalloc, borderColor:'#ef4444', tension:0.3, pointRadius:5, fill:false, borderDash:[2,4] },
+    { label:'💰 Billable (BIT)',      data:billBit,   borderColor:'#059669', tension:0.3, pointRadius:3, fill:false, borderDash:[5,3], borderWidth:1.5 },
+    { label:'💰 Billable (Badal)',    data:billBadal, borderColor:'#7c3aed', tension:0.3, pointRadius:3, fill:false, borderDash:[5,3], borderWidth:1.5 },
   ] : [
-    { label:'Billable',     data:bill, borderColor:'#059669', backgroundColor:'rgba(5,150,105,0.1)',   tension:0.3, pointRadius:5, pointBackgroundColor:'#059669', fill:true },
-    { label:'Credited',     data:cred, borderColor:'#d97706', backgroundColor:'rgba(217,119,6,0.07)',   tension:0.3, pointRadius:5, pointBackgroundColor:'#d97706', fill:true },
-    { label:'Non-Billable', data:nonB, borderColor:'#9ca3af', backgroundColor:'rgba(156,163,175,0.05)', tension:0.3, pointRadius:5, pointBackgroundColor:'#9ca3af', fill:true, borderDash:[3,3] },
+    { label:'💰 Billable',     data:bill,    borderColor:'#059669', backgroundColor:'rgba(5,150,105,0.12)',   tension:0.3, pointRadius:5, fill:true },
+    { label:'🔶 Credited',     data:cred,    borderColor:'#d97706', backgroundColor:'rgba(217,119,6,0.08)',   tension:0.3, pointRadius:5, fill:true },
+    { label:'⬜ Non-Billable', data:nonB,    borderColor:'#9ca3af', backgroundColor:'rgba(156,163,175,0.06)', tension:0.3, pointRadius:5, fill:true, borderDash:[3,3] },
+    { label:'🔲 Unallocated',  data:unalloc, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,0.06)',   tension:0.3, pointRadius:5, fill:true, borderDash:[2,4] },
   ];
 
   // Vertical divider between May and June (actuals vs forecast)
