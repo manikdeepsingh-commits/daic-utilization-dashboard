@@ -562,10 +562,33 @@ function overlaps(a, mStart, mEnd) {
 
 function calcMonthForPerson(name, mStart, mEnd) {
   const myAllocs = ALLOCS.filter(a => a.name === name && overlaps(a, mStart, mEnd));
-  const total    = myAllocs.reduce((s, a) => s + a.alloc, 0);
-  const billable = myAllocs.filter(a => a.billType === 'billable').reduce((s, a) => s + a.alloc, 0);
-  const credited = myAllocs.filter(a => a.billType === 'credited').reduce((s, a) => s + a.alloc, 0);
-  const nonBill  = myAllocs.filter(a => a.billType === 'non-billable').reduce((s, a) => s + a.alloc, 0);
+  if (!myAllocs.length) return { total: 0, billable: 0, credited: 0, nonBill: 0, allocs: [] };
+
+  // Daily simulation: iterate every calendar day in the month and sum only
+  // assignments active on that exact day. Averaging across days means
+  // sequential rollovers (one ends Jun 29, next starts Jun 30) are NOT
+  // double-counted, while truly concurrent assignments still accumulate.
+  let sumBill = 0, sumCred = 0, sumNonBill = 0, days = 0;
+  const cur  = new Date(mStart + 'T12:00:00Z');
+  const last = new Date(mEnd   + 'T12:00:00Z');
+  while (cur <= last) {
+    const ds = cur.toISOString().slice(0, 10);
+    let bill = 0, cred = 0, nonb = 0;
+    for (const a of myAllocs) {
+      if (a.start <= ds && a.end >= ds) {
+        if      (a.billType === 'billable')     bill += a.alloc;
+        else if (a.billType === 'credited')     cred += a.alloc;
+        else                                    nonb += a.alloc;
+      }
+    }
+    sumBill += bill; sumCred += cred; sumNonBill += nonb; days++;
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  const billable = days ? Math.round(sumBill    / days) : 0;
+  const credited = days ? Math.round(sumCred    / days) : 0;
+  const nonBill  = days ? Math.round(sumNonBill / days) : 0;
+  const total    = billable + credited + nonBill;
   return { total, billable, credited, nonBill, allocs: myAllocs };
 }
 
@@ -959,7 +982,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 16 June 2026, 11:17 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 16 June 2026, 2:09 PM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
