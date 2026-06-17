@@ -104,6 +104,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .pct-partial { background: #fef3c7; color: #92400e; }
 .pct-full { background: #dcfce7; color: #166534; }
 .proj-tag { font-size: 9.5px; background: #f3f4f6; color: #6b7280; padding: 1px 6px; border-radius: 4px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.next-alloc-hint { font-size: 10px; color: #9ca3af; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Trend chart ── */
 .trend-wrap { background: white; border-radius: 14px; padding: 20px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb; margin-bottom: 20px; }
@@ -768,6 +769,24 @@ function renderMonthly() {
   renderTrend(co);
 }
 
+// Returns the next upcoming assignment for a person (first start date strictly after today).
+// Used to surface a "coming up" hint on bench/partial cards.
+function getNextAlloc(name, today) {
+  const upcoming = ALLOCS
+    .filter(a => a.name === name && a.start > today)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  if (!upcoming.length) return null;
+  const next = upcoming[0];
+  const d = new Date(next.start + 'T12:00:00Z');
+  const fmtDate = d.toLocaleDateString('en-CA', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  let typeLabel;
+  if      (next.billType === 'excluded')    typeLabel = '🏖 On Leave';
+  else if (next.billType === 'billable')    typeLabel = `💰 ${next.alloc}%`;
+  else if (next.billType === 'credited')    typeLabel = `🔶 ${next.alloc}%`;
+  else                                      typeLabel = `⬜ ${next.alloc}%`;
+  return { label: typeLabel, date: fmtDate, project: next.project };
+}
+
 function personCard(p, type) {
   const initials = p.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   const avCls = p.company === 'Bitstrapped' ? 'av-bit' : 'av-badal';
@@ -782,13 +801,21 @@ function personCard(p, type) {
   if (type === 'bench') {
     pctBadge = `<span class="alloc-pct pct-zero">0%</span>`;
   } else if (p.onLeaveOnly) {
-    // All assignments are Excluded Hours (PTO / Time Off) — person is on leave, not on a project
     pctBadge = `<span class="alloc-pct" title="On approved leave / PTO — not available for project work" style="background:#ede9fe;color:#5b21b6;">🏖 On Leave</span>`;
   } else {
     const billBadge = p.billable   ? `<span class="alloc-pct pct-full" title="Billable" style="background:#d1fae5;color:#065f46;">💰${p.billable}%</span>` : '';
     const credBadge = p.credited   ? `<span class="alloc-pct pct-partial" title="Credited" style="background:#fef3c7;color:#92400e;">🔶${p.credited}%</span>` : '';
     const nbBadge   = p.nonBill    ? `<span class="alloc-pct" title="Non-Billable" style="background:#f3f4f6;color:#6b7280;">⬜${p.nonBill}%</span>` : '';
     pctBadge = billBadge + credBadge + nbBadge;
+  }
+  // Upcoming allocation hint — only on bench and partial cards
+  let nextTag = '';
+  if (type === 'bench' || type === 'partial') {
+    const today = new Date().toISOString().slice(0, 10);
+    const next = getNextAlloc(p.name, today);
+    if (next) {
+      nextTag = `<div class="next-alloc-hint" title="${next.project}">→ ${next.label} · ${next.date}</div>`;
+    }
   }
   return `
     <div class="person-row">
@@ -797,6 +824,7 @@ function personCard(p, type) {
         <div class="person-name">${p.name}</div>
         <div class="person-title">${p.title}</div>
         <div class="person-meta">${coBadge}${pctBadge}${projTags}</div>
+        ${nextTag}
       </div>
     </div>`;
 }
@@ -1054,7 +1082,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 17 June 2026, 11:40 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 17 June 2026, 3:31 PM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
