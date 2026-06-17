@@ -587,30 +587,35 @@ function overlaps(a, mStart, mEnd) {
 
 function calcMonthForPerson(name, mStart, mEnd) {
   const myAllocs = ALLOCS.filter(a => a.name === name && overlaps(a, mStart, mEnd));
-  if (!myAllocs.length) return { total: 0, billable: 0, credited: 0, nonBill: 0, allocs: [] };
+  if (!myAllocs.length) return { total: 0, billable: 0, credited: 0, nonBill: 0, allocs: [], onLeaveOnly: false };
 
-  // Daily simulation: iterate every calendar day in the month and sum only
-  // assignments active on that exact day. Averaging across days means
-  // sequential rollovers (one ends Jun 29, next starts Jun 30) are NOT
-  // double-counted, while truly concurrent assignments still accumulate.
-  // Assignments with billType === 'excluded' (Salesforce Utilization_Category__c = 'Excluded Hours',
-  // e.g. TELUS Digital Time Off, WillowTree PTO) are skipped entirely — they do not
-  // contribute to utilization totals or overallocation detection.
+  // Day-by-day simulation. PTO / Time Off override rule:
+  // On any day where an 'excluded' (Utilization_Category__c = 'Excluded Hours') assignment is active,
+  // the person is on leave — count that day as 100% non-billable and 0% billable/credited.
+  // This prevents false overallocation from concurrent PTO + project assignments, AND keeps
+  // leave-only people visible as occupied (not bench).
+  // On non-PTO days: sum all non-excluded assignments normally.
   let sumBill = 0, sumCred = 0, sumNonBill = 0, days = 0;
   const cur  = new Date(mStart + 'T12:00:00Z');
   const last = new Date(mEnd   + 'T12:00:00Z');
   while (cur <= last) {
     const ds = cur.toISOString().slice(0, 10);
-    let bill = 0, cred = 0, nonb = 0;
-    for (const a of myAllocs) {
-      if (a.billType === 'excluded') continue;
-      if (a.start <= ds && a.end >= ds) {
-        if      (a.billType === 'billable')     bill += a.alloc;
-        else if (a.billType === 'credited')     cred += a.alloc;
-        else                                    nonb += a.alloc;
+    const onLeave = myAllocs.some(a => a.billType === 'excluded' && a.start <= ds && a.end >= ds);
+    if (onLeave) {
+      sumNonBill += 100; // PTO day: occupied but non-billable
+    } else {
+      let bill = 0, cred = 0, nonb = 0;
+      for (const a of myAllocs) {
+        if (a.billType === 'excluded') continue;
+        if (a.start <= ds && a.end >= ds) {
+          if      (a.billType === 'billable')  bill += a.alloc;
+          else if (a.billType === 'credited')  cred += a.alloc;
+          else                                 nonb += a.alloc;
+        }
       }
+      sumBill += bill; sumCred += cred; sumNonBill += nonb;
     }
-    sumBill += bill; sumCred += cred; sumNonBill += nonb; days++;
+    days++;
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
 
@@ -618,7 +623,41 @@ function calcMonthForPerson(name, mStart, mEnd) {
   const credited = days ? Math.round(sumCred    / days) : 0;
   const nonBill  = days ? Math.round(sumNonBill / days) : 0;
   const total    = billable + credited + nonBill;
-  return { total, billable, credited, nonBill, allocs: myAllocs };
+  // Flag if all active assignments for this person in the period are excluded (on leave only)
+  const nonExcluded = myAllocs.filter(a => a.billType !== 'excluded');
+  const onLeaveOnly = nonExcluded.length === 0 && myAllocs.length > 0;
+  return { total, billable, credited, nonBill, allocs: myAllocs, onLeaveOnly };
+}
+
+// Returns bench/partial/full status using a today-forward window.
+// Used for the current month so mid-month starters reflect their *current* state,
+// not a diluted average from the beginning of the month.
+function calcPersonStatusFromDate(name, fromDate, mEnd) {
+  const myAllocs = ALLOCS.filter(a => a.name === name && overlaps(a, fromDate, mEnd));
+  if (!myAllocs.length) return 'bench';
+  let sumTotal = 0, days = 0;
+  const cur  = new Date(fromDate + 'T12:00:00Z');
+  const last = new Date(mEnd     + 'T12:00:00Z');
+  while (cur <= last) {
+    const ds = cur.toISOString().slice(0, 10);
+    const onLeave = myAllocs.some(a => a.billType === 'excluded' && a.start <= ds && a.end >= ds);
+    if (onLeave) {
+      sumTotal += 100;
+    } else {
+      let dayTotal = 0;
+      for (const a of myAllocs) {
+        if (a.billType === 'excluded') continue;
+        if (a.start <= ds && a.end >= ds) dayTotal += a.alloc;
+      }
+      sumTotal += dayTotal;
+    }
+    days++;
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  const avg = days ? Math.round(sumTotal / days) : 0;
+  if (avg === 0) return 'bench';
+  if (avg < 100) return 'partial';
+  return 'full';
 }
 
 function avg(arr) { return arr.length ? Math.round(arr.reduce((s,v)=>s+v,0)/arr.length) : 0; }
@@ -628,14 +667,26 @@ function calcMonthStats(mKey, coFilter) {
   let people = PEOPLE;
   if (coFilter !== 'all') people = people.filter(p => p.company === coFilter);
 
+  // For the current month, bench/partial/full status uses today-forward (not month start).
+  // This means someone who started a 100% assignment mid-month shows as "Full" — not "Partial"
+  // from the diluted monthly average. Future months always use the full-month average.
+  const today = new Date().toISOString().slice(0, 10);
+  const isCurrentMonth = mKey === today.slice(0, 7);
+  const statusFrom = isCurrentMonth ? (today <= m.end ? today : m.end) : m.start;
+
   const bench = [], partial = [], full = [];
   const billPcts = [], credPcts = [], nonBillPcts = [];
 
   people.forEach(p => {
-    const { total, billable, credited, nonBill, allocs } = calcMonthForPerson(p.name, m.start, m.end);
-    const entry = { ...p, totalAlloc: total, billable, credited, nonBill, allocs };
-    if (total === 0) bench.push(entry);
-    else if (total < 100) partial.push(entry);
+    // Full-month averages are always used for % metrics (billable/credited/nonBill)
+    const { total, billable, credited, nonBill, allocs, onLeaveOnly } = calcMonthForPerson(p.name, m.start, m.end);
+    // Bench/partial/full: today-forward for current month, full-month for future months
+    const statusCat = isCurrentMonth
+      ? calcPersonStatusFromDate(p.name, statusFrom, m.end)
+      : (total === 0 ? 'bench' : total < 100 ? 'partial' : 'full');
+    const entry = { ...p, totalAlloc: total, billable, credited, nonBill, allocs, onLeaveOnly };
+    if (statusCat === 'bench') bench.push(entry);
+    else if (statusCat === 'partial') partial.push(entry);
     else full.push(entry);
     billPcts.push(billable);
     credPcts.push(credited);
@@ -741,6 +792,9 @@ function personCard(p, type) {
   let pctBadge;
   if (type === 'bench') {
     pctBadge = `<span class="alloc-pct pct-zero">0%</span>`;
+  } else if (p.onLeaveOnly) {
+    // All assignments are Excluded Hours (PTO / Time Off) — person is on leave, not on a project
+    pctBadge = `<span class="alloc-pct" title="On approved leave / PTO — not available for project work" style="background:#ede9fe;color:#5b21b6;">🏖 On Leave</span>`;
   } else {
     const billBadge = p.billable   ? `<span class="alloc-pct pct-full" title="Billable" style="background:#d1fae5;color:#065f46;">💰${p.billable}%</span>` : '';
     const credBadge = p.credited   ? `<span class="alloc-pct pct-partial" title="Credited" style="background:#fef3c7;color:#92400e;">🔶${p.credited}%</span>` : '';
@@ -1011,7 +1065,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 17 June 2026, 10:26 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 17 June 2026, 10:38 AM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
