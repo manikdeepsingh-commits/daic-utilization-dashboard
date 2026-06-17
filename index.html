@@ -629,34 +629,22 @@ function calcMonthForPerson(name, mStart, mEnd) {
   return { total, billable, credited, nonBill, allocs: myAllocs, onLeaveOnly };
 }
 
-// Returns bench/partial/full status using a today-forward window.
-// Used for the current month so mid-month starters reflect their *current* state,
-// not a diluted average from the beginning of the month.
-function calcPersonStatusFromDate(name, fromDate, mEnd) {
-  const myAllocs = ALLOCS.filter(a => a.name === name && overlaps(a, fromDate, mEnd));
+// Returns bench/partial/full status for the current month using TODAY's snapshot.
+// A point-in-time check avoids the averaging problem: David Gleason at 105% today
+// should be Full, not Partial just because one of his assignments ends before month-end.
+// Logic: sum all assignments active on `today` (with PTO override: if any excluded
+// assignment is active on `today`, count as 100% non-billable, 0% billable/credited).
+function calcPersonStatusToday(name, today) {
+  const myAllocs = ALLOCS.filter(a => a.name === name && a.start <= today && a.end >= today);
   if (!myAllocs.length) return 'bench';
-  let sumTotal = 0, days = 0;
-  const cur  = new Date(fromDate + 'T12:00:00Z');
-  const last = new Date(mEnd     + 'T12:00:00Z');
-  while (cur <= last) {
-    const ds = cur.toISOString().slice(0, 10);
-    const onLeave = myAllocs.some(a => a.billType === 'excluded' && a.start <= ds && a.end >= ds);
-    if (onLeave) {
-      sumTotal += 100;
-    } else {
-      let dayTotal = 0;
-      for (const a of myAllocs) {
-        if (a.billType === 'excluded') continue;
-        if (a.start <= ds && a.end >= ds) dayTotal += a.alloc;
-      }
-      sumTotal += dayTotal;
-    }
-    days++;
-    cur.setUTCDate(cur.getUTCDate() + 1);
+  const onLeave = myAllocs.some(a => a.billType === 'excluded');
+  if (onLeave) return 'full'; // on PTO today = occupied, not bench
+  let total = 0;
+  for (const a of myAllocs) {
+    if (a.billType !== 'excluded') total += a.alloc;
   }
-  const avg = days ? Math.round(sumTotal / days) : 0;
-  if (avg === 0) return 'bench';
-  if (avg < 100) return 'partial';
+  if (total === 0) return 'bench';
+  if (total < 100) return 'partial';
   return 'full';
 }
 
@@ -667,12 +655,13 @@ function calcMonthStats(mKey, coFilter) {
   let people = PEOPLE;
   if (coFilter !== 'all') people = people.filter(p => p.company === coFilter);
 
-  // For the current month, bench/partial/full status uses today-forward (not month start).
-  // This means someone who started a 100% assignment mid-month shows as "Full" — not "Partial"
-  // from the diluted monthly average. Future months always use the full-month average.
+  // For the current month, bench/partial/full status is a TODAY snapshot (not a monthly average).
+  // Today's snapshot: sum assignments active today → Full/Partial/Bench based on that single day.
+  // This correctly handles mid-month starters (David Paul) and people with partially-overlapping
+  // assignments (David Gleason at 105% today shouldn't be diluted to Partial by assignments ending later).
+  // Future months continue using the full-month average.
   const today = new Date().toISOString().slice(0, 10);
   const isCurrentMonth = mKey === today.slice(0, 7);
-  const statusFrom = isCurrentMonth ? (today <= m.end ? today : m.end) : m.start;
 
   const bench = [], partial = [], full = [];
   const billPcts = [], credPcts = [], nonBillPcts = [];
@@ -680,9 +669,9 @@ function calcMonthStats(mKey, coFilter) {
   people.forEach(p => {
     // Full-month averages are always used for % metrics (billable/credited/nonBill)
     const { total, billable, credited, nonBill, allocs, onLeaveOnly } = calcMonthForPerson(p.name, m.start, m.end);
-    // Bench/partial/full: today-forward for current month, full-month for future months
+    // Bench/partial/full: today snapshot for current month, full-month average for future months
     const statusCat = isCurrentMonth
-      ? calcPersonStatusFromDate(p.name, statusFrom, m.end)
+      ? calcPersonStatusToday(p.name, today)
       : (total === 0 ? 'bench' : total < 100 ? 'partial' : 'full');
     const entry = { ...p, totalAlloc: total, billable, credited, nonBill, allocs, onLeaveOnly };
     if (statusCat === 'bench') bench.push(entry);
@@ -1065,7 +1054,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 17 June 2026, 10:38 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 17 June 2026, 11:13 AM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
