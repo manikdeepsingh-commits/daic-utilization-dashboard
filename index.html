@@ -586,9 +586,7 @@ function overlaps(a, mStart, mEnd) {
 }
 
 function calcMonthForPerson(name, mStart, mEnd) {
-  // Skip assignments with 0 scheduled hours — PSA returns a formula-default alloc % on these
-  // (e.g. OVERTIME (NB) placeholders) even though no real capacity is planned behind them.
-  const myAllocs = ALLOCS.filter(a => a.name === name && overlaps(a, mStart, mEnd) && a.hours > 0);
+  const myAllocs = ALLOCS.filter(a => a.name === name && overlaps(a, mStart, mEnd));
   if (!myAllocs.length) return { total: 0, billable: 0, credited: 0, nonBill: 0, allocs: [], onLeaveOnly: false };
 
   // Day-by-day simulation. PTO / Time Off override rule:
@@ -637,7 +635,7 @@ function calcMonthForPerson(name, mStart, mEnd) {
 // Logic: sum all assignments active on `today` (with PTO override: if any excluded
 // assignment is active on `today`, count as 100% non-billable, 0% billable/credited).
 function calcPersonStatusToday(name, today) {
-  const myAllocs = ALLOCS.filter(a => a.name === name && a.start <= today && a.end >= today && a.hours > 0);
+  const myAllocs = ALLOCS.filter(a => a.name === name && a.start <= today && a.end >= today);
   if (!myAllocs.length) return 'bench';
   const onLeave = myAllocs.some(a => a.billType === 'excluded');
   if (onLeave) return 'full'; // on PTO today = occupied, not bench
@@ -1056,7 +1054,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 17 June 2026, 11:32 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 17 June 2026, 11:40 AM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
