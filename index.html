@@ -202,8 +202,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <!-- Main tabs -->
   <div class="tab-bar">
     <button class="tab active" onclick="switchTab(event,'monthly')">📅 Monthly View</button>
-    <button class="tab" onclick="switchTab(event,'bench')">🔴 On Bench (7)</button>
-    <button class="tab" onclick="switchTab(event,'alloc')">🟢 Allocations (116)</button>
+    <button class="tab" onclick="switchTab(event,'bench')">🔴 On Bench (8)</button>
+    <button class="tab" onclick="switchTab(event,'alloc')">🟢 Allocations (180)</button>
     <button class="tab" onclick="switchTab(event,'charts')">📊 Role & Service Line</button>
   </div>
 
@@ -216,9 +216,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <div class="month-selector">
       <button class="month-btn actuals" onclick="selectMonth(this,'2026-04')" data-m="2026-04">April 2026<span class="month-tag">✓ Actuals</span></button>
       <button class="month-btn actuals" onclick="selectMonth(this,'2026-05')" data-m="2026-05">May 2026<span class="month-tag">✓ Actuals</span></button>
-      <button class="month-btn current active" onclick="selectMonth(this,'2026-06')" data-m="2026-06">June 2026<span class="month-tag">◉ Current</span></button>
-      <button class="month-btn forecast" onclick="selectMonth(this,'2026-07')" data-m="2026-07">July 2026<span class="month-tag">⟳ Forecast</span></button>
+      <button class="month-btn actuals" onclick="selectMonth(this,'2026-06')" data-m="2026-06">June 2026<span class="month-tag">✓ Actuals</span></button>
+      <button class="month-btn current active" onclick="selectMonth(this,'2026-07')" data-m="2026-07">July 2026<span class="month-tag">◉ Current</span></button>
       <button class="month-btn forecast" onclick="selectMonth(this,'2026-08')" data-m="2026-08">August 2026<span class="month-tag">⟳ Forecast</span></button>
+      <button class="month-btn forecast" onclick="selectMonth(this,'2026-09')" data-m="2026-09">September 2026<span class="month-tag">⟳ Forecast</span></button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
         <select id="monthCo" onchange="renderMonthly()" style="padding:7px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;background:white;">
           <option value="all">All Companies</option>
@@ -565,11 +566,12 @@ const PEOPLE = buildPeople();
 // MONTHLY CALCULATION ENGINE
 // ════════════════════════════════════════════════════════
 const MONTHS = [
-  { key:'2026-04', label:'April 2026',  type:'actuals',  start:'2026-04-01', end:'2026-04-30' },
-  { key:'2026-05', label:'May 2026',    type:'actuals',  start:'2026-05-01', end:'2026-05-31' },
-  { key:'2026-06', label:'June 2026',   type:'current',  start:'2026-06-01', end:'2026-06-30' },
-  { key:'2026-07', label:'July 2026',   type:'forecast', start:'2026-07-01', end:'2026-07-31' },
-  { key:'2026-08', label:'August 2026', type:'forecast', start:'2026-08-01', end:'2026-08-31' },
+  { key:'2026-04', label:'April 2026',     type:'actuals',  start:'2026-04-01', end:'2026-04-30' },
+  { key:'2026-05', label:'May 2026',       type:'actuals',  start:'2026-05-01', end:'2026-05-31' },
+  { key:'2026-06', label:'June 2026',      type:'actuals',  start:'2026-06-01', end:'2026-06-30' },
+  { key:'2026-07', label:'July 2026',      type:'current',  start:'2026-07-01', end:'2026-07-31' },
+  { key:'2026-08', label:'August 2026',    type:'forecast', start:'2026-08-01', end:'2026-08-31' },
+  { key:'2026-09', label:'September 2026', type:'forecast', start:'2026-09-01', end:'2026-09-30' },
 ];
 
 function overlaps(a, mStart, mEnd) {
@@ -685,7 +687,7 @@ function calcMonthStats(mKey, coFilter) {
 // ════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════
-let activeMonth = '2026-06';
+let activeMonth = '2026-07';
 let allocFilter = 'all';
 const sortState = { bench: { col:0, dir:1 }, alloc: { col:0, dir:1 } };
 const pageState = { bench:1, alloc:1 };
@@ -1072,7 +1074,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 10:11 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 10:37 AM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
