@@ -872,7 +872,7 @@ function personCard(p, type) {
     ? '<span class="pill pill-bit" style="font-size:9px;padding:1px 5px;">BIT</span>'
     : '<span class="pill pill-badal" style="font-size:9px;padding:1px 5px;">BAD</span>';
   const projTags = p.allocs && p.allocs.length
-    ? p.allocs.map(a => `<span class="proj-tag" title="${a.pending ? 'Pending resource request — not yet assigned: ' : ''}${a.project}" style="${a.pending ? 'border-style:dashed;font-style:italic;' : ''}">${a.pending ? '🔮 ' : ''}${a.project}</span>`).join('')
+    ? p.allocs.map(a => `<span class="proj-tag" title="${a.pending ? `Pending resource request — not yet assigned — requested at ${a.alloc}%: ` : ''}${a.project}" style="${a.pending ? 'border-style:dashed;font-style:italic;' : ''}">${a.pending ? `🔮 ${a.alloc}% · ` : ''}${a.project}</span>`).join('')
     : '';
   const pendingBadge = (includeRequests && p.hasPending)
     ? `<span class="pill" title="This month's numbers include at least one pending (not-yet-assigned) resource request" style="font-size:9px;padding:1px 5px;background:#ede9fe;color:#5b21b6;">🔮 PENDING</span>`
@@ -1162,7 +1162,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 11:03 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 11:45 AM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
