@@ -568,7 +568,7 @@ const ALLOCS = [
   {name:'Yuval Yakubov', title:'Contingent Unmapped', company:'Badal', project:'Basin Electric - SAP DataSphere to Bigquery', alloc:100, billType:'billable', start:'2026-05-08', end:'2026-12-31', hours:1312, status:'Tentative', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/services/data/v62.0/sobjects/pse__Assignment__c/a97TS000000S1dtYAC'},
 ];
 
-const REQUESTS = [
+const REQUESTS_RAW = [
   {name:'Akansha Sohal', title:'Contingent Unmapped', company:'Bitstrapped', project:'Project Manager (open request)', alloc:25, billType:'billable', start:'2026-07-06', end:'2026-07-31', hours:0, status:'Ready to Staff', svc:'Digital Agency', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005v7J0AQ', role:'Project Manager', pending:true},
   {name:'Akhil Jahagirdar', title:'Contingent Unmapped', company:'Badal', project:'CXAI - Conv. Agents - TCS - TELUS - GenAI Bots - 2026', alloc:100, billType:'billable', start:'2026-07-06', end:'2026-12-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006Puz0AE', role:'Cloud Engineer', pending:true},
   {name:'Akhil Jahagirdar', title:'Contingent Unmapped', company:'Badal', project:'DevOps Engineer (open request)', alloc:100, billType:'billable', start:'2026-07-20', end:'2026-11-30', hours:0, status:'Hold', svc:'', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006YlN0AU', role:'DevOps Engineer', pending:true},
@@ -594,6 +594,14 @@ const REQUESTS = [
   {name:'Tim Mobbs', title:'Contingent Unmapped', company:'Badal', project:'DevOps Engineer (open request)', alloc:100, billType:'billable', start:'2026-07-06', end:'2027-03-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005yGT0AY', role:'DevOps Engineer', pending:true},
   {name:'Udayapriya Ravikumar', title:'Contingent Unmapped', company:'Bitstrapped', project:'Database Engineer (open request)', alloc:50, billType:'billable', start:'2026-08-24', end:'2026-12-31', hours:0, status:'Ready to Staff', svc:'Global Branch', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006PTZ0A2', role:'Database Engineer', pending:true},
 ];
+
+// Resource requests sometimes name a "suggested" or "staffed" resource who isn't actually
+// part of the Bitstrapped/Badal contingent workforce (e.g. a WillowTree employee being pulled
+// in from outside). Only keep requests tied to someone who already exists in our own
+// Bitstrapped/Badal roster (BENCH + ALLOCS) — otherwise the pending-requests toggle would
+// pull in outside people who don't belong on this dashboard.
+const KNOWN_RESOURCE_NAMES = new Set([...BENCH.map(p => p.name), ...ALLOCS.map(a => a.name)]);
+const REQUESTS = REQUESTS_RAW.filter(r => KNOWN_RESOURCE_NAMES.has(r.name));
 
 // ════════════════════════════════════════════════════════
 // MASTER PEOPLE LIST  (union of bench + alloc sources)
@@ -1154,7 +1162,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 10:56 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 11:03 AM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
