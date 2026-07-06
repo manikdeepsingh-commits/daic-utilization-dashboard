@@ -67,6 +67,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .month-btn.current:not(.active) { background: #fffbeb; color: #92400e; border-color: #fbbf24; }
 .month-btn.forecast { border-color: #ddd6fe; }
 .month-btn.forecast:not(.active) { background: #f5f3ff; color: #5b21b6; border-color: #a78bfa; }
+.req-toggle-wrap { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 2px solid #ddd6fe; border-radius: 10px; background: #f5f3ff; cursor: pointer; user-select: none; }
+.req-toggle-wrap span { font-size: 12px; font-weight: 700; color: #5b21b6; }
+.req-switch { position: relative; width: 34px; height: 19px; flex-shrink: 0; }
+.req-switch input { opacity: 0; width: 0; height: 0; }
+.req-switch .req-slider { position: absolute; inset: 0; background: #c4b5fd; border-radius: 999px; transition: 0.15s; }
+.req-switch .req-slider::before { content: ''; position: absolute; width: 15px; height: 15px; left: 2px; top: 2px; background: white; border-radius: 50%; transition: 0.15s; }
+.req-switch input:checked + .req-slider { background: #7c3aed; }
+.req-switch input:checked + .req-slider::before { transform: translateX(15px); }
+.pending-banner { display: none; align-items: center; gap: 8px; background: #f5f3ff; border: 1px solid #ddd6fe; color: #5b21b6; font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: 10px; margin-bottom: 14px; }
 
 /* ── Monthly summary bar ── */
 .monthly-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
@@ -221,12 +230,20 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <button class="month-btn forecast" onclick="selectMonth(this,'2026-08')" data-m="2026-08">August 2026<span class="month-tag">⟳ Forecast</span></button>
       <button class="month-btn forecast" onclick="selectMonth(this,'2026-09')" data-m="2026-09">September 2026<span class="month-tag">⟳ Forecast</span></button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+        <label class="req-toggle-wrap" title="Blend open (not-yet-assigned) resource requests into the utilization math below, as if each one were already a confirmed assignment">
+          <span class="req-switch"><input type="checkbox" id="includeReqToggle" onchange="onToggleRequests(this)"><span class="req-slider"></span></span>
+          <span>🔮 Include Pending Requests</span>
+        </label>
         <select id="monthCo" onchange="renderMonthly()" style="padding:7px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;background:white;">
           <option value="all">All Companies</option>
           <option value="Bitstrapped">Bitstrapped</option>
           <option value="Badal">Badal</option>
         </select>
       </div>
+    </div>
+
+    <div class="pending-banner" id="pendingBanner">
+      🔮 Projected view — the numbers below blend in <span id="pendingBannerCount">0</span> open resource request(s) not yet confirmed as assignments. Turn the toggle off to see confirmed-only utilization.
     </div>
 
     <!-- Trend chart -->
@@ -551,6 +568,33 @@ const ALLOCS = [
   {name:'Yuval Yakubov', title:'Contingent Unmapped', company:'Badal', project:'Basin Electric - SAP DataSphere to Bigquery', alloc:100, billType:'billable', start:'2026-05-08', end:'2026-12-31', hours:1312, status:'Tentative', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/services/data/v62.0/sobjects/pse__Assignment__c/a97TS000000S1dtYAC'},
 ];
 
+const REQUESTS = [
+  {name:'Akansha Sohal', title:'Contingent Unmapped', company:'Bitstrapped', project:'Project Manager (open request)', alloc:25, billType:'billable', start:'2026-07-06', end:'2026-07-31', hours:0, status:'Ready to Staff', svc:'Digital Agency', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005v7J0AQ', role:'Project Manager', pending:true},
+  {name:'Akhil Jahagirdar', title:'Contingent Unmapped', company:'Badal', project:'CXAI - Conv. Agents - TCS - TELUS - GenAI Bots - 2026', alloc:100, billType:'billable', start:'2026-07-06', end:'2026-12-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006Puz0AE', role:'Cloud Engineer', pending:true},
+  {name:'Akhil Jahagirdar', title:'Contingent Unmapped', company:'Badal', project:'DevOps Engineer (open request)', alloc:100, billType:'billable', start:'2026-07-20', end:'2026-11-30', hours:0, status:'Hold', svc:'', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006YlN0AU', role:'DevOps Engineer', pending:true},
+  {name:'Akhil Jahagirdar', title:'Contingent Unmapped', company:'Badal', project:'DevOps Engineer (open request)', alloc:100, billType:'billable', start:'2026-09-08', end:'2027-03-31', hours:0, status:'Ready to Staff', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS00000066U90AI', role:'DevOps Engineer', pending:true},
+  {name:'Chidiebube Amos', title:'Contingent Unmapped', company:'Badal', project:'Cloud Engineer (open request)', alloc:100, billType:'billable', start:'2026-08-10', end:'2026-11-30', hours:0, status:'Hold - Ready to Assign', svc:'', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006Yjl0AE', role:'Cloud Engineer', pending:true},
+  {name:'Christopher Jaques', title:'Contingent Unmapped', company:'Badal', project:'Architect (open request)', alloc:100, billType:'billable', start:'2026-07-06', end:'2027-03-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005yDF0AY', role:'Architect', pending:true},
+  {name:'David Gleason', title:'Contingent Unmapped', company:'Bitstrapped', project:'Engineering Lead (open request)', alloc:100, billType:'billable', start:'2026-07-06', end:'2026-08-31', hours:0, status:'Hold - Ready to Assign', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006ZW90AM', role:'Engineering Lead', pending:true},
+  {name:'Hardik Gupta', title:'Contingent Unmapped', company:'Bitstrapped', project:'AI Engineer (open request)', alloc:50, billType:'billable', start:'2026-07-06', end:'2026-07-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005vAX0AY', role:'AI Engineer', pending:true},
+  {name:'Lukas Bell', title:'', company:'Bitstrapped', project:'Project Manager (open request)', alloc:10, billType:'billable', start:'2026-08-03', end:'2026-08-28', hours:0, status:'Hold', svc:'Digital Agency', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005vC90AI', role:'Project Manager', pending:true},
+  {name:'Martin Allaire', title:'Contingent Unmapped', company:'Badal', project:'DevOps Engineer (open request)', alloc:100, billType:'billable', start:'2026-09-08', end:'2027-03-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005yJh0AI', role:'DevOps Engineer', pending:true},
+  {name:'Monim Abdul', title:'Contingent Unmapped', company:'Bitstrapped', project:'Data Engineer (open request)', alloc:100, billType:'billable', start:'2026-08-10', end:'2026-11-30', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006Ymz0AE', role:'Data Engineer', pending:true},
+  {name:'Monim Abdul', title:'Contingent Unmapped', company:'Bitstrapped', project:'Cloud Engineer (open request)', alloc:50, billType:'billable', start:'2026-08-24', end:'2026-12-31', hours:0, status:'Ready to Staff', svc:'Global Branch', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006PRx0AM', role:'Cloud Engineer', pending:true},
+  {name:'Naveena Chandwani', title:'Contingent Unmapped', company:'Bitstrapped', project:'Architect (open request)', alloc:25, billType:'billable', start:'2026-07-06', end:'2026-07-31', hours:0, status:'Ready to Staff', svc:'', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005v8v0AA', role:'Architect', pending:true},
+  {name:'Parsa Morsal', title:'Contingent Unmapped', company:'Bitstrapped', project:'AI Engineer (open request)', alloc:50, billType:'billable', start:'2026-07-06', end:'2026-08-31', hours:0, status:'Hold - Ready to Assign', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006ZZN0A2', role:'AI Engineer', pending:true},
+  {name:'Raymond Dang', title:'Contingent Unmapped', company:'Badal', project:'DevOps Engineer (open request)', alloc:100, billType:'billable', start:'2026-09-02', end:'2027-03-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005yEr0AI', role:'DevOps Engineer', pending:true},
+  {name:'Richard Peng', title:'', company:'Badal', project:'DevOps Engineer (open request)', alloc:100, billType:'billable', start:'2026-07-06', end:'2027-03-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005yLJ0AY', role:'DevOps Engineer', pending:true},
+  {name:'Rosalind Ng', title:'Contingent Unmapped', company:'Bitstrapped', project:'Data Engineer (open request)', alloc:100, billType:'billable', start:'2026-08-24', end:'2026-12-31', hours:0, status:'Ready to Staff', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006PYP0A2', role:'Data Engineer', pending:true},
+  {name:'Saiful Azad', title:'Contingent Unmapped', company:'Bitstrapped', project:'Cloud Engineer (open request)', alloc:100, billType:'billable', start:'2026-08-24', end:'2026-11-30', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006Yob0AE', role:'Cloud Engineer', pending:true},
+  {name:'Stacy Ewah', title:'Contingent Unmapped', company:'Bitstrapped', project:'Delivery Lead (open request)', alloc:20, billType:'billable', start:'2026-08-24', end:'2026-12-31', hours:0, status:'Ready to Staff', svc:'Digital Agency', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006PWn0AM', role:'Delivery Lead', pending:true},
+  {name:'Stephen Gabriel', title:'Contingent Unmapped', company:'Badal', project:'Engineering Lead (open request)', alloc:100, billType:'billable', start:'2026-07-06', end:'2027-03-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005yI50AI', role:'Engineering Lead', pending:true},
+  {name:'Stuart Purgavie', title:'Contingent Unmapped', company:'Badal', project:'Architect (open request)', alloc:25, billType:'billable', start:'2026-07-06', end:'2027-03-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005yBd0AI', role:'Architect', pending:true},
+  {name:'Sunil Udhayakumar', title:'Contingent Unmapped', company:'Bitstrapped', project:'Architect (open request)', alloc:25, billType:'billable', start:'2026-08-24', end:'2026-12-31', hours:0, status:'Ready to Staff', svc:'Global Branch', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006PVB0A2', role:'Architect', pending:true},
+  {name:'Tim Mobbs', title:'Contingent Unmapped', company:'Badal', project:'DevOps Engineer (open request)', alloc:100, billType:'billable', start:'2026-07-06', end:'2027-03-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005yGT0AY', role:'DevOps Engineer', pending:true},
+  {name:'Udayapriya Ravikumar', title:'Contingent Unmapped', company:'Bitstrapped', project:'Database Engineer (open request)', alloc:50, billType:'billable', start:'2026-08-24', end:'2026-12-31', hours:0, status:'Ready to Staff', svc:'Global Branch', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006PTZ0A2', role:'Database Engineer', pending:true},
+];
+
 // ════════════════════════════════════════════════════════
 // MASTER PEOPLE LIST  (union of bench + alloc sources)
 // ════════════════════════════════════════════════════════
@@ -561,6 +605,35 @@ function buildPeople() {
   return Object.values(map);
 }
 const PEOPLE = buildPeople();
+
+// People who only show up via a pending resource request (no current bench/alloc record) —
+// e.g. someone being pulled in from outside the usual roster for an open req. These should
+// only count toward the roster when the "include pending requests" toggle is on, otherwise
+// they'd inflate the bench count with people who aren't really part of this pool today.
+function buildPendingOnlyPeople() {
+  const known = new Set(PEOPLE.map(p => p.name));
+  const map = {};
+  REQUESTS.forEach(r => { if (!known.has(r.name) && !map[r.name]) map[r.name] = { name:r.name, title:r.title, company:r.company, svc:r.svc, requestOnly:true }; });
+  return Object.values(map);
+}
+const PENDING_ONLY_PEOPLE = buildPendingOnlyPeople();
+
+// ════════════════════════════════════════════════════════
+// PENDING RESOURCE REQUESTS TOGGLE
+// ════════════════════════════════════════════════════════
+// When on, open (not-yet-assigned) resource requests are blended into the same
+// day-by-day calculation as confirmed assignments — giving a "projected" view of
+// utilization if every pending request converts to a real assignment.
+let includeRequests = false;
+function onToggleRequests(cb) {
+  includeRequests = cb.checked;
+  document.getElementById('pendingBanner').style.display = includeRequests ? 'flex' : 'none';
+  document.getElementById('pendingBannerCount').textContent = REQUESTS.length;
+  renderMonthly();
+}
+function getCalcSource() {
+  return includeRequests ? ALLOCS.concat(REQUESTS) : ALLOCS;
+}
 
 // ════════════════════════════════════════════════════════
 // MONTHLY CALCULATION ENGINE
@@ -579,8 +652,8 @@ function overlaps(a, mStart, mEnd) {
 }
 
 function calcMonthForPerson(name, mStart, mEnd) {
-  const myAllocs = ALLOCS.filter(a => a.name === name && overlaps(a, mStart, mEnd));
-  if (!myAllocs.length) return { total: 0, billable: 0, credited: 0, nonBill: 0, allocs: [], onLeaveOnly: false };
+  const myAllocs = getCalcSource().filter(a => a.name === name && overlaps(a, mStart, mEnd));
+  if (!myAllocs.length) return { total: 0, billable: 0, credited: 0, nonBill: 0, allocs: [], onLeaveOnly: false, hasPending: false };
 
   // Day-by-day simulation. PTO / Time Off override rule:
   // On any day where an 'excluded' (Utilization_Category__c = 'Excluded Hours') assignment is active,
@@ -619,7 +692,8 @@ function calcMonthForPerson(name, mStart, mEnd) {
   // Flag if all active assignments for this person in the period are excluded (on leave only)
   const nonExcluded = myAllocs.filter(a => a.billType !== 'excluded');
   const onLeaveOnly = nonExcluded.length === 0 && myAllocs.length > 0;
-  return { total, billable, credited, nonBill, allocs: myAllocs, onLeaveOnly };
+  const hasPending = myAllocs.some(a => a.pending);
+  return { total, billable, credited, nonBill, allocs: myAllocs, onLeaveOnly, hasPending };
 }
 
 // Returns bench/partial/full status for the current month using TODAY's snapshot.
@@ -628,7 +702,7 @@ function calcMonthForPerson(name, mStart, mEnd) {
 // Logic: sum all assignments active on `today` (with PTO override: if any excluded
 // assignment is active on `today`, count as 100% non-billable, 0% billable/credited).
 function calcPersonStatusToday(name, today) {
-  const myAllocs = ALLOCS.filter(a => a.name === name && a.start <= today && a.end >= today);
+  const myAllocs = getCalcSource().filter(a => a.name === name && a.start <= today && a.end >= today);
   if (!myAllocs.length) return 'bench';
   const onLeave = myAllocs.some(a => a.billType === 'excluded');
   if (onLeave) return 'full'; // on PTO today = occupied, not bench
@@ -645,7 +719,7 @@ function avg(arr) { return arr.length ? Math.round(arr.reduce((s,v)=>s+v,0)/arr.
 
 function calcMonthStats(mKey, coFilter) {
   const m = MONTHS.find(x => x.key === mKey);
-  let people = PEOPLE;
+  let people = includeRequests ? PEOPLE.concat(PENDING_ONLY_PEOPLE) : PEOPLE;
   if (coFilter !== 'all') people = people.filter(p => p.company === coFilter);
 
   // For the current month, bench/partial/full status is a TODAY snapshot (not a monthly average).
@@ -659,14 +733,16 @@ function calcMonthStats(mKey, coFilter) {
   const bench = [], partial = [], full = [];
   const billPcts = [], credPcts = [], nonBillPcts = [];
 
+  let pendingCount = 0;
   people.forEach(p => {
     // Full-month averages are always used for % metrics (billable/credited/nonBill)
-    const { total, billable, credited, nonBill, allocs, onLeaveOnly } = calcMonthForPerson(p.name, m.start, m.end);
+    const { total, billable, credited, nonBill, allocs, onLeaveOnly, hasPending } = calcMonthForPerson(p.name, m.start, m.end);
     // Bench/partial/full: today snapshot for current month, full-month average for future months
     const statusCat = isCurrentMonth
       ? calcPersonStatusToday(p.name, today)
       : (total === 0 ? 'bench' : total < 100 ? 'partial' : 'full');
-    const entry = { ...p, totalAlloc: total, billable, credited, nonBill, allocs, onLeaveOnly };
+    const entry = { ...p, totalAlloc: total, billable, credited, nonBill, allocs, onLeaveOnly, hasPending };
+    if (hasPending) pendingCount++;
     if (statusCat === 'bench') bench.push(entry);
     else if (statusCat === 'partial') partial.push(entry);
     else full.push(entry);
@@ -681,7 +757,7 @@ function calcMonthStats(mKey, coFilter) {
   const avgCred    = avg(credPcts);
   const avgNonBill = avg(nonBillPcts);
   const avgUnalloc = Math.max(0, 100 - avgBill - avgCred - avgNonBill);
-  return { bench, partial, full, total: people.length, utilPct, avgBill, avgCred, avgNonBill, avgUnalloc, m };
+  return { bench, partial, full, total: people.length, utilPct, avgBill, avgCred, avgNonBill, avgUnalloc, m, pendingCount };
 }
 
 // ════════════════════════════════════════════════════════
@@ -731,6 +807,7 @@ function renderMonthly() {
     <div class="mscard" style="border-left:2px solid #e5e7eb;padding-left:12px"><div class="mscard-val red">${stats.bench.length}</div><div class="mscard-lbl">On Bench</div></div>
     <div class="mscard"><div class="mscard-val amber">${stats.partial.length}</div><div class="mscard-lbl">Partial</div></div>
     <div class="mscard"><div class="mscard-val green">${stats.full.length}</div><div class="mscard-lbl">Fully Alloc.</div></div>
+    ${includeRequests ? `<div class="mscard" style="border-left:2px solid #e5e7eb;padding-left:12px" title="People whose numbers this month include at least one pending (not-yet-assigned) resource request"><div class="mscard-val" style="color:#7c3aed">${stats.pendingCount}</div><div class="mscard-lbl">🔮 w/ Pending Req</div></div>` : ''}
   `;
 
   // Three columns
@@ -787,7 +864,10 @@ function personCard(p, type) {
     ? '<span class="pill pill-bit" style="font-size:9px;padding:1px 5px;">BIT</span>'
     : '<span class="pill pill-badal" style="font-size:9px;padding:1px 5px;">BAD</span>';
   const projTags = p.allocs && p.allocs.length
-    ? p.allocs.map(a => `<span class="proj-tag" title="${a.project}">${a.project}</span>`).join('')
+    ? p.allocs.map(a => `<span class="proj-tag" title="${a.pending ? 'Pending resource request — not yet assigned: ' : ''}${a.project}" style="${a.pending ? 'border-style:dashed;font-style:italic;' : ''}">${a.pending ? '🔮 ' : ''}${a.project}</span>`).join('')
+    : '';
+  const pendingBadge = (includeRequests && p.hasPending)
+    ? `<span class="pill" title="This month's numbers include at least one pending (not-yet-assigned) resource request" style="font-size:9px;padding:1px 5px;background:#ede9fe;color:#5b21b6;">🔮 PENDING</span>`
     : '';
   let pctBadge;
   if (type === 'bench') {
@@ -815,7 +895,7 @@ function personCard(p, type) {
       <div class="person-info">
         <div class="person-name">${p.name}</div>
         <div class="person-title">${p.title}</div>
-        <div class="person-meta">${coBadge}${pctBadge}${projTags}</div>
+        <div class="person-meta">${coBadge}${pendingBadge}${pctBadge}${projTags}</div>
         ${nextTag}
       </div>
     </div>`;
@@ -1074,7 +1154,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 10:37 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 10:56 AM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
