@@ -704,23 +704,53 @@ function calcMonthForPerson(name, mStart, mEnd) {
   return { total, billable, credited, nonBill, allocs: myAllocs, onLeaveOnly, hasPending };
 }
 
-// Returns bench/partial/full status for the current month using TODAY's snapshot.
-// A point-in-time check avoids the averaging problem: David Gleason at 105% today
-// should be Full, not Partial just because one of his assignments ends before month-end.
-// Logic: sum all assignments active on `today` (with PTO override: if any excluded
-// assignment is active on `today`, count as 100% non-billable, 0% billable/credited).
-function calcPersonStatusToday(name, today) {
-  const myAllocs = getCalcSource().filter(a => a.name === name && a.start <= today && a.end >= today);
-  if (!myAllocs.length) return 'bench';
-  const onLeave = myAllocs.some(a => a.billType === 'excluded');
-  if (onLeave) return 'full'; // on PTO today = occupied, not bench
+// Returns bench/partial/full for one specific date, given a person's full list of
+// (unfiltered-by-date) allocation records. Shared by the "today" snapshot (current month)
+// and the "peak day" scan (future months) below.
+function dayStatus(myAllocs, ds) {
+  const active = myAllocs.filter(a => a.start <= ds && a.end >= ds);
+  if (!active.length) return 'bench';
+  const onLeave = active.some(a => a.billType === 'excluded');
+  if (onLeave) return 'full'; // on PTO = occupied, not bench
   let total = 0;
-  for (const a of myAllocs) {
+  for (const a of active) {
     if (a.billType !== 'excluded') total += a.alloc;
   }
   if (total === 0) return 'bench';
   if (total < 100) return 'partial';
   return 'full';
+}
+
+// Returns bench/partial/full status for the current month using TODAY's snapshot.
+// A point-in-time check avoids the averaging problem: David Gleason at 105% today
+// should be Full, not Partial just because one of his assignments ends before month-end.
+function calcPersonStatusToday(name, today) {
+  const myAllocs = getCalcSource().filter(a => a.name === name);
+  return dayStatus(myAllocs, today);
+}
+
+// Returns bench/partial/full status for a FUTURE month using a "peak day" scan rather than
+// a month-long average. This matters once pending requests are blended in: a request that
+// starts partway through the month (e.g. Aug 24) gets diluted by the averaging in
+// calcMonthForPerson (8 days of the month vs. 31), which can keep someone looking "Partial"
+// even though they'd be fully — or over — allocated for every day the request is actually live.
+// Scanning day-by-day and taking the highest status reached (Full > Partial > Bench) reflects
+// "will this person hit capacity at some point this month" instead of "on average this month".
+function calcMonthPeakStatus(name, mStart, mEnd) {
+  const myAllocs = getCalcSource().filter(a => a.name === name && overlaps(a, mStart, mEnd));
+  if (!myAllocs.length) return 'bench';
+  const rank = { bench: 0, partial: 1, full: 2 };
+  let best = 'bench';
+  const cur  = new Date(mStart + 'T12:00:00Z');
+  const last = new Date(mEnd   + 'T12:00:00Z');
+  while (cur <= last) {
+    const ds = cur.toISOString().slice(0, 10);
+    const s = dayStatus(myAllocs, ds);
+    if (rank[s] > rank[best]) best = s;
+    if (best === 'full') break; // can't rank higher — stop early
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return best;
 }
 
 function avg(arr) { return arr.length ? Math.round(arr.reduce((s,v)=>s+v,0)/arr.length) : 0; }
@@ -734,7 +764,10 @@ function calcMonthStats(mKey, coFilter) {
   // Today's snapshot: sum assignments active today → Full/Partial/Bench based on that single day.
   // This correctly handles mid-month starters (David Paul) and people with partially-overlapping
   // assignments (David Gleason at 105% today shouldn't be diluted to Partial by assignments ending later).
-  // Future months continue using the full-month average.
+  // Future months use a peak-day scan (see calcMonthPeakStatus) rather than the month-long average,
+  // for the same reason: a person/request that only overlaps part of the month (e.g. Udayapriya's
+  // pending Database Engineer request starting Aug 24) would otherwise get diluted down to a
+  // "Partial" average even though they're fully booked for every day the request is actually live.
   const today = new Date().toISOString().slice(0, 10);
   const isCurrentMonth = mKey === today.slice(0, 7);
 
@@ -745,10 +778,10 @@ function calcMonthStats(mKey, coFilter) {
   people.forEach(p => {
     // Full-month averages are always used for % metrics (billable/credited/nonBill)
     const { total, billable, credited, nonBill, allocs, onLeaveOnly, hasPending } = calcMonthForPerson(p.name, m.start, m.end);
-    // Bench/partial/full: today snapshot for current month, full-month average for future months
+    // Bench/partial/full: today snapshot for current month, peak-day scan for future months
     const statusCat = isCurrentMonth
       ? calcPersonStatusToday(p.name, today)
-      : (total === 0 ? 'bench' : total < 100 ? 'partial' : 'full');
+      : calcMonthPeakStatus(p.name, m.start, m.end);
     const entry = { ...p, totalAlloc: total, billable, credited, nonBill, allocs, onLeaveOnly, hasPending };
     if (hasPending) pendingCount++;
     if (statusCat === 'bench') bench.push(entry);
@@ -1162,7 +1195,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 12:14 PM ET';
+document.getElementById('asOf').textContent = 'Data as of: 6 July 2026, 12:20 PM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
