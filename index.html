@@ -376,6 +376,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 // ════════════════════════════════════════════════════════
 const BENCH = [
   { name:'Akhil Jahagirdar', title:'Contingent Unmapped', role:'Contingent Unmapped', company:'Badal', svc:'', region:'CA - Home Office', country:'Canada', next:'Aritzia - SOW E2-1 - Google Cloud Foundations 100% - 2026-09-02', url:'https://willowtree.my.salesforce.com/003TS00000bSmlxYAC' },
+  { name:'Aneeqa Butt', title:'Contingent Unmapped', role:'Contingent Unmapped', company:'Badal', svc:'DS Finance', region:'CA - Home Office', country:'Canada', next:'TELUS Digital - Time Off 100% - 2026-07-31', url:'https://willowtree.my.salesforce.com/003TS00000ebFe0YAE' },
   { name:'Chidiebube Amos', title:'Contingent Unmapped', role:'Contingent Unmapped', company:'Badal', svc:'Data, AI & Cloud', region:'CA - Home Office', country:'Canada', next:'Aritzia - SOW E2-5 - Day-to-Day Support / Remediation 100% - 2026-08-24', url:'https://willowtree.my.salesforce.com/003TS00000eBUaGYAW' },
   { name:'Dillon Caliph', title:'Help Desk Analyst', role:'Project Leadership - Restricted', company:'Badal', svc:'IT DS', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000oTQvCYAW' },
   { name:'Jayesh Amarnani', title:'Lead Data Engineer', role:'TBD Role', company:'Badal', svc:'Data, AI & Cloud Leadership', region:'CA - Home Office', country:'Canada', next:'None scheduled', url:'https://willowtree.my.salesforce.com/003TS00000pYzBlYAK' },
@@ -574,7 +575,6 @@ const ALLOCS = [
   {name:'Yash Shastri', title:'Contingent Unmapped', company:'Badal', project:'TELUS Digital - Project Detox', alloc:100, billType:'billable', start:'2026-04-01', end:'2026-12-31', hours:1520, status:'Tentative', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/services/data/v62.0/sobjects/pse__Assignment__c/a97TS000000RDQzYAO'},
   {name:'Yuval Yakubov', title:'Contingent Unmapped', company:'Badal', project:'Basin Electric - SAP DataSphere to Bigquery', alloc:100, billType:'billable', start:'2026-05-08', end:'2026-12-31', hours:1312, status:'Tentative', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/services/data/v62.0/sobjects/pse__Assignment__c/a97TS000000S1dtYAC'},
 ];
-
 const REQUESTS_RAW = [
   {name:'Akansha Sohal', title:'Contingent Unmapped', company:'Bitstrapped', project:'Project Manager (open request)', alloc:25, billType:'billable', start:'2026-07-06', end:'2026-07-31', hours:0, status:'Ready to Staff', svc:'Digital Agency', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000005v7J0AQ', role:'Project Manager', pending:true},
   {name:'Akhil Jahagirdar', title:'Contingent Unmapped', company:'Badal', project:'CXAI - Conv. Agents - TCS - TELUS - GenAI Bots - 2026', alloc:100, billType:'billable', start:'2026-07-06', end:'2026-12-31', hours:0, status:'Hold', svc:'Data, AI & Cloud', region:'CA - Home Office', url:'https://willowtree.my.salesforce.com/aAzTS0000006Puz0AE', role:'Cloud Engineer', pending:true},
@@ -1202,7 +1202,7 @@ function makeHBar(id,dataMap,color){
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-document.getElementById('asOf').textContent = 'Data as of: 21 July 2026, 10:00 AM ET';
+document.getElementById('asOf').textContent = 'Data as of: 21 July 2026, 10:02 AM ET';
 renderMonthly();
 renderBench();
 renderAlloc();
